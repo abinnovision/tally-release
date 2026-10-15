@@ -3,8 +3,10 @@ import { matchBranch } from "./branches.js";
 import { collectPlanFacts } from "./facts.js";
 import { propagate } from "./propagate.js";
 import {
+	footerOf,
 	reach,
 	releaseAsWarnings,
+	releaseGroup,
 	releaseUnit,
 	unitIntent,
 } from "./release.js";
@@ -27,7 +29,13 @@ import type {
 	Unit,
 	VersionScheme,
 } from "./plugin.js";
-import type { ReleaseInput, UnitIntent, UnitRelease } from "./release.js";
+import type { Propagated } from "./propagate.js";
+import type {
+	GroupMember,
+	ReleaseInput,
+	UnitIntent,
+	UnitRelease,
+} from "./release.js";
 import type { Workspace } from "./workspace.js";
 
 const lineWarnings = (
@@ -111,6 +119,7 @@ const releaseInputs = (
 
 interface Entry {
 	unit: Unit;
+	group: string | null;
 	hit: AffectedUnit | undefined;
 	facts: UnitFacts | undefined;
 	intent: UnitIntent<unknown> | undefined;
@@ -125,6 +134,7 @@ const UNRELEASED: UnitRelease = {
 	releaseAs: null,
 	releaseAsFooter: null,
 	next: null,
+	nextSource: null,
 	prerelease: null,
 };
 
@@ -145,7 +155,7 @@ const unitPlan = (entry: Entry, all: boolean): UnitPlan | undefined => {
 		plugin: unit.plugin,
 		scheme: unit.scheme,
 		tags: [...unit.tags],
-		group: null,
+		group: entry.group,
 		affected: hit ? { reason: hit.reason, via: hit.via } : null,
 		kind,
 		baseTag: facts?.baseTag?.name ?? null,
@@ -160,6 +170,67 @@ const unitPlan = (entry: Entry, all: boolean): UnitPlan | undefined => {
 		sha: entry.head,
 		changes: planChanges(entry.intent),
 	};
+};
+
+/** Releases of fixed group members, by unit id, and the group entries. */
+const resolveGroupReleases = (
+	{ facts, affected }: Pick<ResolveInput, "facts" | "affected">,
+	units: {
+		inputs: ReadonlyMap<string, ReleaseInput<any>>;
+		intents: ReadonlyMap<string, UnitIntent<any>>;
+		propagated: ReadonlyMap<string, Propagated>;
+	},
+	warnings: Warning[],
+): { releases: Map<string, UnitRelease>; groups: GroupPlan[] } => {
+	const hits = new Set(affected.units.map((u) => u.id));
+	const releases = new Map<string, UnitRelease>();
+	const groups: GroupPlan[] = [];
+	for (const group of facts.groups) {
+		const members = group.members.flatMap((id): GroupMember<any>[] => {
+			const input = units.inputs.get(id);
+			const intent = units.intents.get(id);
+
+			return input && intent
+				? [
+						{
+							input,
+							bump: units.propagated.get(id)?.bump ?? intent.bump,
+							releaseAs: intent.releaseAs,
+						},
+					]
+				: [];
+		});
+		if (members.length === 0) {
+			continue;
+		}
+
+		const release = releaseGroup(group, members, warnings);
+		for (const { input, releaseAs } of members) {
+			releases.set(input.unit.id, {
+				...release,
+				from: input.facts.baseTag?.version ?? null,
+				releaseAs:
+					releaseAs === undefined
+						? null
+						: input.scheme.format(releaseAs.version),
+				releaseAsFooter: footerOf(releaseAs),
+			});
+		}
+
+		groups.push({
+			name: group.name,
+			members: [...group.members],
+			baseTag: group.baseTag?.name ?? null,
+			from: release.from,
+			bump: release.bump,
+			next: release.next,
+			version: group.members.some((id) => hits.has(id))
+				? release.prerelease
+				: null,
+		});
+	}
+
+	return { releases, groups };
 };
 
 /** `resolvePlan` with the release of each released unit. */
@@ -187,15 +258,31 @@ const resolveReleases = (
 	const intents = new Map<string, UnitIntent<unknown>>(
 		[...inputs].map(([id, i]) => [id, unitIntent(i, warnings)]),
 	);
+	const groupOf = new Map(
+		workspace.groups.flatMap((g) => g.members.map((id) => [id, g.name])),
+	);
 	const propagated = propagate(
 		workspace.graph,
 		workspace.units,
 		new Map(
-			[...intents].map(([id, i]) => [
-				id,
-				{ bump: i.bump, pending: i.bump !== null || i.releaseAs !== undefined },
-			]),
+			[...intents].map(([id, i]) => {
+				const group = groupOf.get(id);
+
+				return [
+					id,
+					{
+						bump: i.bump,
+						pending: i.bump !== null || i.releaseAs !== undefined,
+						...(group === undefined ? {} : { group }),
+					},
+				];
+			}),
 		),
+	);
+	const { releases: groupReleases, groups } = resolveGroupReleases(
+		input,
+		{ inputs, intents, propagated },
+		warnings,
 	);
 
 	const units: UnitPlan[] = [];
@@ -206,13 +293,14 @@ const resolveReleases = (
 		const intent = intents.get(id);
 		const state = propagated.get(id);
 		const release =
-			unitInput && intent
+			groupReleases.get(id) ??
+			(unitInput && intent
 				? releaseUnit(
 						unitInput,
 						{ bump: state?.bump ?? intent.bump, releaseAs: intent.releaseAs },
 						warnings,
 					)
-				: undefined;
+				: undefined);
 		if (release) {
 			releases.set(id, release);
 		}
@@ -220,6 +308,7 @@ const resolveReleases = (
 		const entry = unitPlan(
 			{
 				unit,
+				group: groupOf.get(id) ?? null,
 				hit: hits.get(id),
 				facts: factsById.get(id),
 				intent,
@@ -237,7 +326,7 @@ const resolveReleases = (
 	warnings.push(...noMatchingTag(workspace.units, facts.units, facts.tagNames));
 
 	return {
-		plan: { ...doc, line, units, groups: [], released: [], warnings },
+		plan: { ...doc, line, units, groups, released: [], warnings },
 		releases,
 	};
 };

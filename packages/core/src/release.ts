@@ -1,8 +1,13 @@
-import { maxLevel, uniqueSorted } from "./util.js";
+import { compare, maxLevel, uniqueSorted } from "./util.js";
 
 import type { TallyConfig } from "./config.js";
 import type { Warning } from "./errors.js";
-import type { AttributedChange, RangeFacts, UnitFacts } from "./facts.js";
+import type {
+	AttributedChange,
+	GroupFacts,
+	RangeFacts,
+	UnitFacts,
+} from "./facts.js";
 import type {
 	BumpLevel,
 	Change,
@@ -66,14 +71,14 @@ const parseReleaseAs = <V>(scheme: VersionScheme<V>, raw: string) =>
 const releaseAsProblem = <V>(
 	scheme: VersionScheme<V>,
 	version: V,
-	from: { raw: string; version: V } | undefined,
+	from: From<V> | undefined,
 ): string | undefined => {
 	if (scheme.isPrerelease(version)) {
 		return "is a prerelease";
 	}
 
 	return from && scheme.compare(version, from.version) <= 0
-		? `does not exceed ${from.raw}`
+		? `does not exceed ${from.label}`
 		: undefined;
 };
 
@@ -82,7 +87,7 @@ const pickReleaseAs = <V>(
 	input: {
 		unit: Unit;
 		scheme: VersionScheme<V>;
-		from: { raw: string; version: V } | undefined;
+		from: From<V> | undefined;
 		commits: readonly CommitValues[];
 	},
 	warnings: Warning[],
@@ -208,14 +213,83 @@ const appliedValue = <V>(
 	return undefined;
 };
 
-const fromOf = <V>(scheme: VersionScheme<V>, facts: UnitFacts) => {
-	const base = facts.baseTag;
-	const version = base === null ? undefined : scheme.parse(base.version);
+/** The `from` version of a unit, from `facts.fromTag`. */
+const fromOf = <V>(
+	scheme: VersionScheme<V>,
+	facts: UnitFacts,
+): From<V> | undefined => {
+	const tag = facts.fromTag;
+	const version = tag === null ? undefined : scheme.parse(tag.version);
 
-	return base === null || version === undefined
+	return tag === null || version === undefined
 		? undefined
-		: { raw: base.version, version };
+		: {
+				version,
+				label:
+					facts.group === null
+						? tag.version
+						: `${tag.version} (group ${facts.group})`,
+			};
 };
+
+/** `from` bumped by `bump`; the initial version on a first release. */
+const bumpedOf = <V>(
+	scheme: VersionScheme<V>,
+	bump: BumpLevel | null,
+	{ from, initial }: { from: From<V> | undefined; initial: V },
+): V | undefined =>
+	bump === null
+		? undefined
+		: from === undefined
+			? initial
+			: scheme.bump(from.version, bump);
+
+const ctxOf = (
+	unit: Unit,
+	head: string,
+	at: {
+		baseTag: { name: string } | null;
+		tags: readonly string[];
+		sinceLineBase: number;
+		total: number;
+	},
+): PreCtx => ({
+	unit,
+	head,
+	baseTag: at.baseTag?.name ?? null,
+	tags: at.tags,
+	firstParent: { sinceLineBase: at.sinceLineBase, total: at.total },
+});
+
+const initialOf = <V>(unit: Unit, scheme: VersionScheme<V>): V =>
+	(unit.initialVersion === null
+		? undefined
+		: scheme.parse(unit.initialVersion)) ?? scheme.initial();
+
+/** `next` and prerelease of `raw` under `ctx`. */
+const render = <V>({
+	scheme,
+	raw,
+	ctx,
+	channel,
+}: {
+	scheme: VersionScheme<V>;
+	raw: V | undefined;
+	ctx: PreCtx;
+	channel: string | null;
+}): Pick<UnitRelease, "next" | "prerelease"> => ({
+	next: raw === undefined ? null : scheme.format(scheme.release(raw, ctx)),
+	prerelease:
+		raw === undefined || channel === null
+			? null
+			: scheme.format(scheme.prerelease(raw, { ...ctx, channel })),
+});
+
+/** A parsed `from` version; `label` names it in warnings. */
+interface From<V> {
+	readonly version: V;
+	readonly label: string;
+}
 
 /** The Release-As footer value that applies to a unit. */
 export interface ReleaseAsWinner<V> {
@@ -277,6 +351,8 @@ export interface UnitRelease {
 	} | null;
 	/** Null without a pending bump or Release-As. */
 	readonly next: string | null;
+	/** What set `next`. */
+	readonly nextSource: "bump" | "initial" | "release-as" | null;
 	/** Prerelease of `next` on `channel`; null without a channel or `next`. */
 	readonly prerelease: string | null;
 }
@@ -421,6 +497,17 @@ export const unitIntent = <V>(
 	};
 };
 
+/** The recorded footer of a Release-As winner. */
+export const footerOf = <V>(
+	winner: ReleaseAsWinner<V> | undefined,
+): UnitRelease["releaseAsFooter"] =>
+	winner
+		? {
+				...(winner.sha === undefined ? {} : { sha: winner.sha }),
+				raw: winner.raw,
+			}
+		: null;
+
 /**
  * `next` and prerelease of a released unit from its bump after propagation;
  * Release-As overrides `next`.
@@ -433,48 +520,126 @@ export const releaseUnit = <V>(
 	const { unit, scheme, facts } = input;
 	const { bump } = intent;
 	const releaseAs = intent.releaseAs?.version;
-	const base = facts.baseTag;
 	const from = fromOf(scheme, facts);
-	const initial =
-		(unit.initialVersion === null
-			? undefined
-			: scheme.parse(unit.initialVersion)) ?? scheme.initial();
-	const bumped =
-		bump === null
-			? undefined
-			: from === undefined
-				? initial
-				: scheme.bump(from.version, bump);
-	const raw = releaseAs ?? bumped;
+	const initial = initialOf(unit, scheme);
+	const bumped = bumpedOf(scheme, bump, { from, initial });
 	if (from === undefined && releaseAs === undefined && bumped !== undefined) {
 		warnings.push(...initialBelowPrerelease(scheme, initial, facts));
 	}
 
-	const ctx: PreCtx = {
-		unit,
-		head: input.head,
-		baseTag: base?.name ?? null,
-		tags: facts.tags.map((t) => t.name),
-		firstParent: { sinceLineBase: facts.sinceLineBase, total: facts.total },
-	};
-	const { channel } = input;
+	const raw = releaseAs ?? bumped;
 
 	return {
-		from: base?.version ?? null,
+		from: facts.baseTag?.version ?? null,
 		bump,
 		releaseAs: releaseAs === undefined ? null : scheme.format(releaseAs),
-		releaseAsFooter: intent.releaseAs
-			? {
-					...(intent.releaseAs.sha === undefined
-						? {}
-						: { sha: intent.releaseAs.sha }),
-					raw: intent.releaseAs.raw,
-				}
-			: null,
-		next: raw === undefined ? null : scheme.format(scheme.release(raw, ctx)),
-		prerelease:
-			raw === undefined || channel === null
+		releaseAsFooter: footerOf(intent.releaseAs),
+		nextSource:
+			raw === undefined
 				? null
-				: scheme.format(scheme.prerelease(raw, { ...ctx, channel })),
+				: releaseAs !== undefined
+					? "release-as"
+					: from === undefined
+						? "initial"
+						: "bump",
+		...render({
+			scheme,
+			raw,
+			ctx: ctxOf(unit, input.head, {
+				...facts,
+				tags: facts.tags.map((t) => t.name),
+			}),
+			channel: input.channel,
+		}),
+	};
+};
+
+/** A fixed group member; `input.facts.fromTag` is the group base tag. */
+export interface GroupMember<V> {
+	readonly input: ReleaseInput<V>;
+	/** After propagation and group raising. */
+	readonly bump: BumpLevel | null;
+	readonly releaseAs: ReleaseAsWinner<V> | undefined;
+}
+
+/**
+ * Release of a fixed group with members sorted by id:
+ * `next = max(bump(groupFrom, L), max_i releaseAs_i)`, the initial version
+ * (max over members) instead of the bump on a first release. One `PreCtx`:
+ * first member, group base tag, union of member tags, group line base
+ * counter, max total.
+ */
+export const releaseGroup = <V>(
+	group: GroupFacts,
+	members: readonly GroupMember<V>[],
+	warnings: Warning[],
+): Omit<UnitRelease, "releaseAsFooter"> => {
+	const [first] = members;
+	if (!first) {
+		throw new TypeError("a group has at least one member");
+	}
+
+	const { scheme, facts, channel, head } = first.input;
+	const max = (a: V | undefined, b: V | undefined): V | undefined =>
+		a === undefined || (b !== undefined && scheme.compare(b, a) > 0) ? b : a;
+	const from = fromOf(scheme, facts);
+	const bump = members.reduce<BumpLevel | null>(
+		(level, m) => maxLevel(level, m.bump),
+		null,
+	);
+	const releaseAs = members.reduce<V | undefined>(
+		(value, m) => max(value, m.releaseAs?.version),
+		undefined,
+	);
+	const initial = members.reduce<V>(
+		(value, m) => max(value, initialOf(m.input.unit, scheme)) ?? value,
+		initialOf(first.input.unit, scheme),
+	);
+	const bumped = bumpedOf(scheme, bump, { from, initial });
+	if (from === undefined && releaseAs === undefined && bumped !== undefined) {
+		for (const m of members) {
+			warnings.push(...initialBelowPrerelease(scheme, initial, m.input.facts));
+		}
+	}
+
+	const tags = members
+		.flatMap((m) => m.input.facts.tags)
+		.flatMap((t) => {
+			const version = scheme.parse(t.version);
+
+			return version === undefined ? [] : [{ name: t.name, version }];
+		})
+		.sort(
+			(a, b) => scheme.compare(a.version, b.version) || compare(a.name, b.name),
+		)
+		.map((t) => t.name);
+	const raw = max(bumped, releaseAs);
+	const byReleaseAs =
+		releaseAs !== undefined &&
+		(bumped === undefined || scheme.compare(releaseAs, bumped) > 0);
+
+	return {
+		from: group.baseTag?.version ?? null,
+		bump,
+		releaseAs: releaseAs === undefined ? null : scheme.format(releaseAs),
+		nextSource:
+			raw === undefined
+				? null
+				: byReleaseAs
+					? "release-as"
+					: from === undefined
+						? "initial"
+						: "bump",
+		...render({
+			scheme,
+			raw,
+			ctx: ctxOf(first.input.unit, head, {
+				baseTag: group.baseTag,
+				tags,
+				sinceLineBase: group.sinceLineBase,
+				total: Math.max(...members.map((m) => m.input.facts.total)),
+			}),
+			channel,
+		}),
 	};
 };

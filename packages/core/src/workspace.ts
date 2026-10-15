@@ -2,6 +2,7 @@ import { corePlugin } from "./builtin.js";
 import { CONFIG_FILE } from "./config.js";
 import { discoverUnits } from "./discover.js";
 import { buildGraph } from "./graph.js";
+import { resolveGroups } from "./groups.js";
 import { activatePlugins, runHook } from "./plugins.js";
 import { releaseSettings } from "./release.js";
 import { collectSchemes } from "./schemes.js";
@@ -10,6 +11,7 @@ import { uniqueSorted } from "./util.js";
 import type { TallyConfig } from "./config.js";
 import type { Warning } from "./errors.js";
 import type { Graph, SourcedEdge } from "./graph.js";
+import type { Group } from "./groups.js";
 import type { IntentSource, Unit } from "./plugin.js";
 import type { ActivePlugin, PluginEnv } from "./plugins.js";
 import type { ReleaseSettings } from "./release.js";
@@ -94,6 +96,8 @@ export interface Workspace {
 	readonly intents: readonly IntentEntry[];
 	/** Bumps and branch rules with defaults applied. */
 	readonly release: ReleaseSettings;
+	/** Fixed groups, sorted by name. */
+	readonly groups: readonly Group[];
 }
 
 /** Runs plugin hooks sequentially in config order and builds the graph. */
@@ -112,6 +116,8 @@ export const loadWorkspace = async (
 		input.config,
 		input.configFile ?? CONFIG_FILE,
 	);
+
+	const groups = resolveGroups(units, input.config.groups, warnings);
 
 	const intents = [
 		{ plugin: corePlugin, options: {} },
@@ -134,5 +140,6 @@ export const loadWorkspace = async (
 		schemes: collectSchemes(active),
 		intents,
 		release: releaseSettings(input.config),
+		groups,
 	};
 };

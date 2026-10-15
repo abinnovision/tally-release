@@ -31,4 +31,33 @@ describe("propagate", () => {
 			c: { bump: "patch", pending: true, propagatedFrom: ["b"] },
 		});
 	});
+
+	it("raises two groups that propagate into each other in a cycle", () => {
+		const state = (group: string, bump: "minor" | null = null) => ({
+			bump,
+			pending: bump !== null,
+			group,
+		});
+		const result = propagate(
+			{ edges: [edge("b", "c"), edge("d", "a")], order: ["a", "b", "c", "d"] },
+			["a", "b", "c", "d"].map((id) => ({ id, propagate: "auto" as const })),
+			new Map([
+				["a", state("g1", "minor")],
+				["b", state("g1")],
+				["c", state("g2")],
+				["d", state("g2")],
+			]),
+		);
+
+		expect(
+			Object.fromEntries(
+				[...result].map(([id, s]) => [id, [s.bump, s.propagatedFrom]]),
+			),
+		).toEqual({
+			a: ["minor", ["d"]],
+			b: ["minor", []],
+			c: ["patch", ["b"]],
+			d: ["patch", []],
+		});
+	});
 });

@@ -1,0 +1,59 @@
+description: >-
+  Propagation and group raising share one fixpoint: a quiet member raised by
+  its group patches its pinned dependent, and a propagated patch on a member
+  raises that member's group.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+      - { id: p, root: packages/p }
+      - { id: q, root: packages/q }
+    edges:
+      - { from: b, to: c, reason: "dependencies: 1.0.0", pinned: true }
+      - { from: c, to: p, reason: "dependencies: 1.0.0", pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+    app: { units: [p, q] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+        packages/p/index.ts: "0"
+        packages/q/index.ts: "0"
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+    - { name: p-v1.0.0, commit: c0 }
+    - { name: q-v1.0.0, commit: c0 }
+plan: {}
+base: c0
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct, via: [] }
+      - { id: b, reason: group, via: [a] }
+      - { id: c, reason: dependent, via: [b] }
+      - { id: p, reason: dependent, via: [c] }
+      - { id: q, reason: group, via: [p] }
+  plan:
+    units:
+      - { id: a, bump: minor, next: 1.1.0, propagatedFrom: [] }
+      - { id: b, bump: minor, next: 1.1.0, propagatedFrom: [] }
+      - { id: c, bump: patch, next: 1.0.1, propagatedFrom: [b] }
+      - { id: p, bump: patch, next: 1.0.1, propagatedFrom: [c] }
+      - { id: q, bump: patch, next: 1.0.1, propagatedFrom: [] }
+    warnings: []

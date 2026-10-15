@@ -1,0 +1,42 @@
+description: >-
+  Member tags with equal versions: the group base is the tag whose commit
+  descends from the other's, not the first member's, so an older fix of a is
+  not pending.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore: release"
+      files: { packages/b/index.ts: "2" }
+  tags:
+    - { name: a-v1.4.0, commit: c0 }
+    - { name: b-v1.4.0, commit: c2 }
+base: c0
+plan: { all: true }
+expect:
+  facts:
+    groups: [{ name: sdk, baseTag: { name: b-v1.4.0 } }]
+    units:
+      - { id: a, from: c2 }
+      - { id: b, from: c2 }
+  plan:
+    units:
+      - { id: a, next: null }
+      - { id: b, next: null }
+    warnings: []

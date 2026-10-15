@@ -1,0 +1,24 @@
+description: >-
+  A unit selected by two groups fails; a group name equal to a unit id is
+  allowed.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/b: { tags: [docker] }
+  groups:
+    a: { units: [a, b] }
+    images: { tags: [docker] }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+base: null
+error:
+  code: E_GROUP_OVERLAP
+  details: { unit: b, groups: [a, images] }

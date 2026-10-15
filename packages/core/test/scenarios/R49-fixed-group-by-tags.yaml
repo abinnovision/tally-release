@@ -1,0 +1,48 @@
+description: >-
+  A group by tags selects released units with the tag only; a group selecting
+  nothing warns and is dropped.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/a: { tags: [docker] }
+    packages/b: { tags: [docker, npm] }
+    packages/c: { tags: [docker], release: false }
+  groups:
+    apps: { tags: [docker] }
+    empty: { tags: [nothing] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct }
+      - { id: b, reason: group, via: [a] }
+    warnings: [{ code: W_GROUP_EMPTY }]
+  plan:
+    units:
+      - { id: a, group: apps, next: 1.1.0 }
+      - { id: b, group: apps, next: 1.1.0 }
+    groups: [{ name: apps, members: [a, b] }]
+    warnings: [{ code: W_GROUP_EMPTY }]

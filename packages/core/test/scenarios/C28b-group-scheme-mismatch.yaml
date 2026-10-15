@@ -1,0 +1,26 @@
+description: Group members with different schemes fail release validation.
+plugins:
+  - name: stub
+    schemes: [flutter]
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b, scheme: flutter }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0+3, commit: c0 }
+base: c0
+plan: { fails: true }
+expect:
+  affected: { units: [] }
+  planError:
+    code: E_GROUP_SCHEME
+    details: { group: sdk, schemes: [flutter, semver] }

@@ -18,6 +18,7 @@ const GROUPS: readonly AffectedReason[] = [
 	"global",
 	"direct",
 	"dependent",
+	"group",
 ];
 
 const tsv = (doc: AffectedDoc): string =>

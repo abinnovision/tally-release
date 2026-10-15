@@ -171,4 +171,66 @@ describe("shadow", () => {
 			"| `packages/b` | b | mismatch | 1.0.0 | 1.1.0 | 1.0.1 | squash-split |",
 		);
 	});
+
+	it("matches a fixed group first release, like linked-versions (G36)", async () => {
+		const apps = (v: string) =>
+			JSON.stringify({ "apps/api-server": v, "apps/groundwork": v });
+		const dir = tmpDir("shadow");
+		const out = join(dir, "report.json");
+		const result = await runCli(
+			["shadow", "--out", out],
+			memoryRepo({
+				commits: [
+					{
+						id: "c0",
+						files: {
+							"tallyrelease.yaml": [
+								"defaults: { tagFormat: 'app-{id}-v{version}' }",
+								"units:",
+								"  apps/api-server: { id: api-server, release: true }",
+								"  apps/groundwork: { id: groundwork, release: true }",
+								"  packages/db: { id: db }",
+								"deps:",
+								"  - { from: db, to: api-server }",
+								"  - { from: db, to: groundwork }",
+								"groups:",
+								"  groundwork: { units: [api-server, groundwork] }",
+								"branches:",
+								"  - { name: main, line: default }",
+							].join("\n"),
+							"release-please-config.json": JSON.stringify({
+								plugins: [
+									{
+										type: "linked-versions",
+										groupName: "groundwork",
+										components: ["api-server", "groundwork"],
+									},
+								],
+							}),
+							".release-please-manifest.json": apps("0.0.0"),
+							"apps/api-server/x.ts": "0",
+							"apps/groundwork/x.ts": "0",
+							"packages/db/x.ts": "0",
+						},
+					},
+					{
+						id: "c1",
+						message: "feat: db schema",
+						files: { "packages/db/x.ts": "1" },
+					},
+					{
+						id: "r",
+						message: "chore: release main",
+						files: { ".release-please-manifest.json": apps("1.0.0") },
+					},
+				],
+			}),
+		);
+		expect(result.code).toBe(0);
+		const report = JSON.parse(readFileSync(out, "utf8")) as ShadowReport;
+		expect(rows(report)).toEqual([
+			["apps/api-server", "match", "1.0.0", ""],
+			["apps/groundwork", "match", "1.0.0", ""],
+		]);
+	});
 });

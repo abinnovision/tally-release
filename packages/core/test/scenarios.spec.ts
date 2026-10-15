@@ -49,8 +49,11 @@ interface Scenario {
 	head?: string;
 	/** Defaults to `main`. */
 	branch?: string;
-	/** Collects plan facts and computes the plan when set. */
-	plan?: { all?: boolean };
+	/**
+	 * Collects plan facts and computes the plan when set; with `fails` a plan
+	 * error is returned as `planError`.
+	 */
+	plan?: { all?: boolean; fails?: boolean };
 	expect?: Record<string, unknown>;
 	error?: { code: string; details?: Record<string, unknown> };
 }
@@ -125,11 +128,20 @@ const run = async (s: Scenario) => {
 	const facts = s.plan
 		? await collectPlanFacts(workspace, git, { head, fs })
 		: undefined;
+	let planError: unknown;
 	const plan = s.plan
 		? await computePlan(workspace, git, {
 				...opts,
 				fs,
 				all: s.plan.all ?? false,
+			}).catch((error: unknown) => {
+				if (!s.plan?.fails) {
+					throw error;
+				}
+
+				planError = error;
+
+				return undefined;
 			})
 		: undefined;
 
@@ -140,6 +152,7 @@ const run = async (s: Scenario) => {
 		affected,
 		facts,
 		plan,
+		planError,
 	};
 };
 

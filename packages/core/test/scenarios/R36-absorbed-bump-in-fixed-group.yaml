@@ -1,0 +1,54 @@
+description: >-
+  A change absorbed by one member is a pending bump; every member releases.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: db, root: packages/db }
+    edges:
+      - { from: db, to: a, reason: dependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+    packages/b: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/db/index.ts: "0"
+    - id: c1
+      message: "feat: db"
+      files: { packages/db/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: db, kind: rebuild, next: null }
+      - id: a
+        affected: { reason: dependent, via: [db] }
+        bump: patch
+        absorbedFrom: [db]
+        next: 1.0.1
+        version: 1.0.1-beta.1
+        changes: [{ sha: c1, via: db }]
+      - id: b
+        affected: { reason: group, via: [a] }
+        bump: patch
+        absorbedFrom: []
+        next: 1.0.1
+        version: 1.0.1-beta.1
+        changes: []
+    groups: [{ name: sdk, bump: patch, next: 1.0.1 }]
+    warnings: []

@@ -12,6 +12,7 @@ import type {
 	RawCommit,
 	ReadonlyFs,
 	ReleaseAsValue,
+	VersionScheme,
 } from "./plugin.js";
 import type { UnitTag } from "./tags.js";
 import type { Workspace } from "./workspace.js";
@@ -99,12 +100,20 @@ export interface RangeFacts {
 
 export interface UnitFacts {
 	readonly id: string;
-	/** Range key: the base tag commit, null from the root. */
+	/** Fixed group name. */
+	readonly group: string | null;
+	/**
+	 * Range key, null from the root: the base tag commit; for a group member
+	 * its own base tag when that descends from the group base tag, else the
+	 * group base tag.
+	 */
 	readonly from: string | null;
 	/** Every matched tag, reachable or not, scheme-sorted. */
 	readonly tags: readonly UnitTag[];
 	/** Highest stable tag merged into head. */
 	readonly baseTag: UnitTag | null;
+	/** Source of the `from` version: the group base tag for members, else `baseTag`. */
+	readonly fromTag: UnitTag | null;
 	/** Highest stable tag on head's first-parent chain. */
 	readonly lineBaseTag: UnitTag | null;
 	readonly sinceLineBase: number;
@@ -115,6 +124,20 @@ export interface UnitFacts {
 	readonly releaseAs: readonly { sha?: string; version: string }[];
 }
 
+/**
+ * A fixed group. Base and line base are the highest member tags as for a
+ * unit; equal versions prefer the tag whose commit descends from the other's.
+ */
+export interface GroupFacts {
+	readonly name: string;
+	readonly members: readonly string[];
+	/** Highest stable member tag merged into head. */
+	readonly baseTag: UnitTag | null;
+	/** Highest stable member tag on head's first-parent chain. */
+	readonly lineBaseTag: UnitTag | null;
+	readonly sinceLineBase: number;
+}
+
 /** Git and intent data of every released unit, collected before release math. */
 export interface PlanFacts {
 	readonly head: string;
@@ -122,6 +145,8 @@ export interface PlanFacts {
 	readonly units: readonly UnitFacts[];
 	/** One entry per distinct base tag commit. */
 	readonly ranges: readonly RangeFacts[];
+	/** Sorted by name. */
+	readonly groups: readonly GroupFacts[];
 	/** Every tag name, sorted. */
 	readonly tagNames: readonly string[];
 	/** Warnings logged by intent sources and for unknown explicit units. */
@@ -236,7 +261,53 @@ export const collectPlanFacts = async (
 		return result;
 	};
 
-	const units: UnitFacts[] = [];
+	const ancestry = new Map<string, boolean>();
+	const isAncestor = async (a: string, b: string): Promise<boolean> => {
+		const key = `${a}\0${b}`;
+		const cached = ancestry.get(key);
+		if (cached !== undefined) {
+			return cached;
+		}
+
+		const result = await git.isAncestor(a, b);
+		ancestry.set(key, result);
+
+		return result;
+	};
+
+	/** The higher tag; equal versions prefer the tag descending from the other. */
+	const higher = async (
+		scheme: VersionScheme<any>,
+		a: UnitTag | null,
+		b: UnitTag | null,
+	): Promise<UnitTag | null> => {
+		if (a === null || b === null) {
+			return a ?? b;
+		}
+
+		const x: unknown = scheme.parse(a.version);
+		const y: unknown = scheme.parse(b.version);
+		// Members with another scheme fail validateRelease (E_GROUP_SCHEME).
+		if (x === undefined || y === undefined) {
+			return a;
+		}
+
+		const order = scheme.compare(y, x);
+		if (order !== 0) {
+			return order > 0 ? b : a;
+		}
+
+		return a.sha !== b.sha && (await isAncestor(a.sha, b.sha)) ? b : a;
+	};
+
+	const bases = new Map<
+		string,
+		{
+			scheme: VersionScheme<any>;
+			baseTag: UnitTag | null;
+			lineBaseTag: UnitTag | null;
+		}
+	>();
 	for (const unit of workspace.units) {
 		const matched = tags.get(unit.id);
 		if (!matched) {
@@ -244,12 +315,11 @@ export const collectPlanFacts = async (
 			continue;
 		}
 
-		const { scheme, tags: unitTags } = matched;
-		const stable = unitTags.filter(
+		const { scheme } = matched;
+		const stable = matched.tags.filter(
 			(t) =>
 				merged.has(t.name) && !scheme.isPrerelease(scheme.parse(t.version)),
 		);
-		const baseTag = stable.at(-1) ?? null;
 		let lineBaseTag: UnitTag | null = null;
 		for (const tag of [...stable].reverse()) {
 			// eslint-disable-next-line no-await-in-loop -- stops at the first match
@@ -259,18 +329,72 @@ export const collectPlanFacts = async (
 			}
 		}
 
-		// eslint-disable-next-line no-await-in-loop -- intent sources run sequentially
-		const { from, changes } = await range(baseTag?.sha ?? null);
-		units.push({
-			id: unit.id,
-			from,
-			tags: unitTags,
+		bases.set(unit.id, { scheme, baseTag: stable.at(-1) ?? null, lineBaseTag });
+	}
+
+	const sinceLine = async (tag: UnitTag | null) =>
+		tag ? await countSince(tag.sha) : total;
+
+	const groups: GroupFacts[] = [];
+	for (const { name, members } of workspace.groups) {
+		let baseTag: UnitTag | null = null;
+		let lineBaseTag: UnitTag | null = null;
+		for (const id of members) {
+			const own = bases.get(id);
+			if (own) {
+				// eslint-disable-next-line no-await-in-loop -- memoized ancestry
+				baseTag = await higher(own.scheme, baseTag, own.baseTag);
+				// eslint-disable-next-line no-await-in-loop -- memoized ancestry
+				lineBaseTag = await higher(own.scheme, lineBaseTag, own.lineBaseTag);
+			}
+		}
+
+		groups.push({
+			name,
+			members,
 			baseTag,
 			lineBaseTag,
-			sinceLineBase: lineBaseTag
-				? // eslint-disable-next-line no-await-in-loop -- memoized per line base
-					await countSince(lineBaseTag.sha)
-				: total,
+			// eslint-disable-next-line no-await-in-loop -- memoized per line base
+			sinceLineBase: await sinceLine(lineBaseTag),
+		});
+	}
+
+	const groupOf = new Map(
+		groups.flatMap((g) => g.members.map((id) => [id, g])),
+	);
+
+	const units: UnitFacts[] = [];
+	for (const unit of workspace.units) {
+		const matched = tags.get(unit.id);
+		const own = bases.get(unit.id);
+		if (!matched || !own) {
+			continue;
+		}
+
+		const { baseTag, lineBaseTag } = own;
+		const group = groupOf.get(unit.id);
+		const fromTag = group ? group.baseTag : baseTag;
+		const rangeBase =
+			group &&
+			baseTag &&
+			fromTag &&
+			baseTag.sha !== fromTag.sha &&
+			// eslint-disable-next-line no-await-in-loop -- memoized ancestry
+			(await isAncestor(fromTag.sha, baseTag.sha))
+				? baseTag
+				: fromTag;
+		// eslint-disable-next-line no-await-in-loop -- intent sources run sequentially
+		const { from, changes } = await range(rangeBase?.sha ?? null);
+		units.push({
+			id: unit.id,
+			group: group?.name ?? null,
+			from,
+			tags: matched.tags,
+			baseTag,
+			fromTag,
+			lineBaseTag,
+			// eslint-disable-next-line no-await-in-loop -- memoized per line base
+			sinceLineBase: await sinceLine(lineBaseTag),
 			total,
 			changes: changes.filter((c) => c.units.includes(unit.id)),
 			releaseAs: changes.flatMap(({ change }) =>
@@ -288,6 +412,7 @@ export const collectPlanFacts = async (
 		head,
 		units,
 		ranges: [...ranges.values()],
+		groups,
 		tagNames: uniqueSorted(allTags.map((t) => t.name)),
 		warnings,
 	};

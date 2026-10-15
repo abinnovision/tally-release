@@ -1,0 +1,30 @@
+description: >-
+  A group's first release uses the highest initial version of its members.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, initialVersion: 0.1.0 }
+  units:
+    packages/b: { initialVersion: 0.3.0 }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      message: "feat: a"
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+base: null
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, from: null, next: 0.3.0 }
+      - { id: b, from: null, next: 0.3.0 }
+    groups: [{ name: sdk, from: null, bump: minor, next: 0.3.0 }]
+    warnings: []

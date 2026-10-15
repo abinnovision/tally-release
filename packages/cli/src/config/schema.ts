@@ -20,6 +20,12 @@ const initialVersion = z.string().meta({
 
 const bumpLevel = z.enum(["major", "minor", "patch"]);
 
+const unitId = z.string().regex(/^(?!\.\.?$)[A-Za-z0-9._-]+$/);
+const groupUnits = z.array(unitId).meta({ description: "Member unit ids." });
+const groupTags = z
+	.array(z.string())
+	.meta({ description: "Selects released units with any of these tags." });
+
 const unitOverlay = z.strictObject({
 	id: z
 		.string()
@@ -183,6 +189,29 @@ export const configSchema = z.strictObject({
 				.exactOptional(),
 		})
 		.meta({ description: "How commits map to bump levels." })
+		.exactOptional(),
+	groups: z
+		.record(
+			unitId,
+			z.union([
+				z.strictObject({
+					units: groupUnits,
+					tags: groupTags.exactOptional(),
+				}),
+				z.strictObject({
+					units: groupUnits.exactOptional(),
+					tags: groupTags,
+				}),
+			]),
+		)
+		.refine((groups) => Object.keys(groups).length > 0, {
+			message: "groups needs at least one group",
+		})
+		.meta({
+			description:
+				"Fixed groups by name (unit id characters): members release together with one version. Each group needs units, tags or both.",
+			minProperties: 1,
+		})
 		.exactOptional(),
 }) satisfies z.ZodType<TallyConfig>;
 

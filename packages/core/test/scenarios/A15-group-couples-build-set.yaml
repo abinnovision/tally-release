@@ -1,0 +1,39 @@
+description: >-
+  A change in one group member affects every member (reason group, via the
+  affected mates); dependents of a coupled member are dependent, and a member
+  that is also a dependent reports dependent.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+      - { id: d, root: packages/d }
+      - { id: e, root: packages/e }
+    edges:
+      - { from: b, to: c, reason: dependencies, pinned: false }
+      - { from: a, to: e, reason: dependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  groups:
+    sdk: { units: [a, b, e] }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+        packages/d/index.ts: "0"
+        packages/e/index.ts: "0"
+    - id: c1
+      files: { packages/a/index.ts: "1" }
+base: c0
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct, via: [] }
+      - { id: b, reason: group, via: [a, e] }
+      - { id: c, reason: dependent, via: [b] }
+      - { id: e, reason: dependent, via: [a] }
+    warnings: []

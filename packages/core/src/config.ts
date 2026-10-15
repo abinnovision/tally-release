@@ -36,6 +36,14 @@ export interface BumpsConfig {
 	absorbed?: "patch" | "minor";
 }
 
+/** A fixed group: members share one version. Selections are unioned. */
+export interface GroupConfig {
+	/** Member unit ids. */
+	units?: string[];
+	/** Selects released units with any of these tags. */
+	tags?: string[];
+}
+
 export interface DepConfig {
 	from: string;
 	to: string;
@@ -63,6 +71,8 @@ export interface TallyConfig {
 	globalInputs?: string[];
 	branches?: BranchConfig[];
 	bumps?: BumpsConfig;
+	/** Fixed groups by name; names follow the unit id pattern. */
+	groups?: Record<string, GroupConfig>;
 }
 
 /** Global input owned by core. */

@@ -1,0 +1,36 @@
+description: >-
+  R09 with the flutter scheme: one PreCtx over the union of member tags gives
+  every member the same build number.
+plugins:
+  - name: stub
+    schemes: [flutter]
+    units:
+      - { id: a, root: packages/a, scheme: flutter }
+      - { id: b, root: packages/b, scheme: flutter }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    app: { units: [a, b] }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: b"
+      files: { packages/b/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0+7, commit: c0 }
+    - { name: b-v1.0.0+3, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, from: 1.0.0+7, next: 1.0.1+8, version: 1.0.1+8 }
+      - { id: b, from: 1.0.0+3, next: 1.0.1+8, version: 1.0.1+8 }
+    groups:
+      - { name: app, baseTag: a-v1.0.0+7, from: 1.0.0+7, next: 1.0.1+8 }
+    warnings: []

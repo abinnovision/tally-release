@@ -1,0 +1,57 @@
+description: >-
+  groundwork shape: two apps in a group without tags absorb an internal
+  change and both release the initial version.
+plugins:
+  - name: stub
+    units:
+      - { id: api-server, root: apps/api-server }
+      - { id: groundwork, root: apps/groundwork }
+      - { id: db, root: packages/db }
+    edges:
+      - { from: db, to: api-server, reason: dependencies, pinned: false }
+      - { from: db, to: groundwork, reason: dependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  defaults: { tagFormat: "app-{id}-v{version}" }
+  units:
+    apps/api-server: { release: true }
+    apps/groundwork: { release: true }
+  groups:
+    groundwork: { units: [api-server, groundwork] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        apps/api-server/index.ts: "0"
+        apps/groundwork/index.ts: "0"
+        packages/db/index.ts: "0"
+    - id: c1
+      message: "feat: db"
+      files: { packages/db/index.ts: "1" }
+base: null
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: db, kind: rebuild, next: null }
+      - id: api-server
+        group: groundwork
+        from: null
+        absorbedFrom: [db]
+        next: 1.0.0
+      - id: groundwork
+        group: groundwork
+        from: null
+        absorbedFrom: [db]
+        next: 1.0.0
+    groups:
+      - name: groundwork
+        members: [api-server, groundwork]
+        baseTag: null
+        from: null
+        bump: patch
+        next: 1.0.0
+        version: null
+    warnings: []
