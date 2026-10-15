@@ -177,10 +177,12 @@ export const resolveBuildBase = async (
 	const defaultRef = async () => {
 		const candidates = [await git.defaultBranch(), ...DEFAULT_REFS];
 		for (const candidate of candidates) {
-			if (
-				candidate !== undefined &&
-				(await git.resolve(candidate)) !== undefined
-			) {
+			if (candidate === undefined) {
+				continue;
+			}
+
+			// eslint-disable-next-line no-await-in-loop -- first match wins
+			if ((await git.resolve(candidate)) !== undefined) {
 				return candidate;
 			}
 		}

@@ -21,7 +21,8 @@
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
-		"./affected.schema.json": "./dist/affected.schema.json"
+		"./affected.schema.json": "./dist/affected.schema.json",
+		"./tallyrelease.schema.json": "./dist/tallyrelease.schema.json"
 	},
 	"bin": {
 		"tallyrelease": "./dist/bin.js"
@@ -60,6 +61,7 @@
 		"@internal/tsconfig": "workspace:*",
 		"@types/node": "^24.0.0",
 		"@vitest/coverage-v8": "^5.0.3",
+		"ajv": "^8.20.0",
 		"eslint": "^10.12.0",
 		"prettier": "^3.9.9",
 		"typescript": "^6.0.3",
@@ -77,7 +79,8 @@
 				"import": "./dist/index.js",
 				"default": "./dist/index.js"
 			},
-			"./affected.schema.json": "./dist/affected.schema.json"
+			"./affected.schema.json": "./dist/affected.schema.json",
+			"./tallyrelease.schema.json": "./dist/tallyrelease.schema.json"
 		},
 		"npm": true
 	}
