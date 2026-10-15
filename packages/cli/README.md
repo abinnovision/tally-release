@@ -1,6 +1,6 @@
 # @tallyrelease/cli
 
-tallyrelease computes the affected build units of a monorepo or single repo from git history and a dependency graph supplied by ecosystem plugins (`node` and `php` are built in). In 0.1 it ships `affected`, `graph` and `check`; release-please still owns versions.
+tallyrelease computes the affected build units of a monorepo or single repo from git history and a dependency graph supplied by ecosystem plugins (`node` and `php` are built in). It also plans releases and runs the release effects (version files, release PRs, tags, forge releases); release-please still owns versions in this repo until the switch.
 
 ## Install
 
@@ -44,6 +44,11 @@ Global flags: `--cwd <dir>` (repository root), `--config <file>` (default `tally
 - `tallyrelease affected [--base <ref>] [--format text|json|tsv] [--json] [--out <file>] [--github-output] [--tag <tag>]` computes the build set. `--out` writes the affected document as JSON, `--github-output` appends outputs to `$GITHUB_OUTPUT`. `--tag` (repeatable) keeps units with any of the given tags.
 - `tallyrelease plan [--branch <name>] [--base <ref>] [--head <ref>] [--all] [--format text|json] [--json] [--out <file>] [--github-output] [--summary]` computes the release plan without changing anything: kind, base version, bump, next version and prerelease version per unit. `--head` plans another commit with the current config, `--all` also lists released units with a pending release outside the build set. `--github-output` writes `plan`, the path of the written plan (`--out`, else `$RUNNER_TEMP/tallyrelease-plan.json`). `--summary` appends a markdown summary to `$GITHUB_STEP_SUMMARY`, or prints it instead of the table when unset (exit 2 with `--json` then). The JSON schema is exported as `@tallyrelease/cli/plan.schema.json`.
 - `tallyrelease explain <unit> [--branch <name>] [--base <ref>]` explains a unit: why it is affected, which commits and files bump it (including changes absorbed from unreleased dependencies), propagation and Release-As footers.
+
+- `tallyrelease version [--branch <name>] [--dry-run]` writes version files and changelogs of all pending releases to the working tree.
+- `tallyrelease pr [--branch <name>] [--dry-run]` opens or updates the release PRs (needs a token).
+- `tallyrelease release [--branch <name>] [--dry-run]` tags merged release PRs, moves floating tags and creates forge releases (needs a token).
+- `tallyrelease run [--branch <name>] [--base <ref>] [--dry-run] [--out <file>] [--github-output] [--summary]` is the CI entry point: `release`, then the plan, then `pr`. `--github-output` also writes `releases`.
 
 - `tallyrelease shadow [--manifest <path>] [--rp-config <path>] [--head <ref>] [--branch <name>] [--pin <spec>] [--out <file>] [--summary] [--strict]` compares tallyrelease with a release-please release: on a push that changes the release-please manifest, it plans the parent commit and compares each unit's next version with the new manifest value. See [Shadow mode](#shadow-mode).
 

@@ -1,6 +1,6 @@
 # tallyrelease - Development Guide
 
-tallyrelease computes affected build units and (later) release plans for monorepos and single repos. The full design is in `docs/design.md`. Current status: v0.1 (`affected`), release-please still owns versions.
+tallyrelease computes affected build units and release plans for monorepos and single repos. The full design is in `docs/design.md`. Current status: v0.3 (release effects: version files, release PRs, tags, forge releases). Release-please still owns versions in this repo until the switch.
 
 ## Packages
 
