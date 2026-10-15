@@ -1,0 +1,22 @@
+description: An opted-in unit uses the version source of its plugin.
+config:
+  plugins: { node: {}, php: {} }
+  units:
+    packages/a: { release: true }
+    services/b: { release: true }
+plugins:
+  - name: node
+    units:
+      - { id: a, root: packages/a, version: file }
+  - name: php
+    units:
+      - { id: b, root: services/b, version: tag }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", services/b/index.php: "1" }
+base: c0
+expect:
+  units:
+    - { id: a, plugin: node, version: file }
+    - { id: b, plugin: php, version: tag }

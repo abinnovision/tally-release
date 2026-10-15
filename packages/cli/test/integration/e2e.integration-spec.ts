@@ -98,11 +98,11 @@ describe("e2e", () => {
 		expect(await affectedAt(dir, sha("c0"))).toEqual([[".", "global"]]);
 
 		const check = await runCli(["graph"], { cwd: dir });
-		expect(check.stdout).toBe("php-app\t.\tphp\n");
+		expect(check.stdout).toBe("php-app\t.\tphp\tnone\n");
 
 		git(dir, "remote", "add", "origin", "git@github.com:acme/widgets.git");
 		const named = await runCli(["graph"], { cwd: dir });
-		expect(named.stdout).toBe("widgets\t.\tphp\n");
+		expect(named.stdout).toBe("widgets\t.\tphp\tnone\n");
 	});
 
 	it("rejects --cwd below the repository root", async () => {

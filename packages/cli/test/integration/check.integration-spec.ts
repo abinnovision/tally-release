@@ -16,7 +16,7 @@ describe("check", () => {
 		});
 		expect(ok).toEqual({
 			code: 0,
-			stdout: "ok: 2 units, 1 edges\n",
+			stdout: "ok: 2 units (0 released), 1 edges\n",
 			stderr: "",
 		});
 
@@ -42,11 +42,46 @@ describe("check", () => {
 		}
 	});
 
+	it("rejects version none with a hint (G17)", async () => {
+		const result = await check({
+			"tallyrelease.yaml": "units:\n  a: { version: none }\n",
+			"a/x": "",
+		});
+		expect(result.code).toBe(1);
+		expect(result.stderr).toMatch(
+			/^E_CONFIG: .*units\.a\.version: .*use release: false/,
+		);
+	});
+
+	it("lists released units (G18)", async () => {
+		const result = await check({
+			"tallyrelease.yaml":
+				"defaults: { release: true }\nunits:\n  b: {}\n  a: {}\n  c: { release: false }\n",
+			"a/x": "",
+			"b/x": "",
+			"c/x": "",
+		});
+		expect(result).toEqual({
+			code: 0,
+			stdout: "ok: 3 units (2 released: a, b), 0 edges\n",
+			stderr: "",
+		});
+
+		const none = await check({
+			"tallyrelease.yaml": "units:\n  a: { version: file }\n",
+			"a/x": "",
+		});
+		expect(none.stdout).toBe("ok: 1 units (0 released), 0 edges\n");
+	});
+
 	it("reads --config relative to --cwd", async () => {
 		const result = await runCli(
 			["check", "--cwd", "sub", "--config", "conf/t.yaml"],
 			{ fs: memoryFs({ "conf/t.yaml": "plugins: {}\n" }) },
 		);
-		expect(result).toMatchObject({ code: 0, stdout: "ok: 0 units, 0 edges\n" });
+		expect(result).toMatchObject({
+			code: 0,
+			stdout: "ok: 0 units (0 released), 0 edges\n",
+		});
 	});
 });

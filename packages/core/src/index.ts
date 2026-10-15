@@ -30,6 +30,7 @@ export type {
 	VersionFile,
 	VersionMode,
 	VersionScheme,
+	VersionSource,
 	WriteCtx,
 } from "./plugin.js";
 export type { ActivePlugin, PluginEnv } from "./plugins.js";

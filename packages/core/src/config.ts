@@ -1,11 +1,14 @@
-import type { Propagate, VersionMode } from "./plugin.js";
+import type { Propagate, VersionSource } from "./plugin.js";
 
 /** Config overlay for the unit at a root; creates a config-only unit if none is discovered. */
 export interface UnitOverlay {
 	id?: string;
 	include?: string[];
 	exclude?: string[];
-	version?: VersionMode;
+	/** Default `defaults.release`, else false. */
+	release?: boolean;
+	/** Overrides the plugin's source; applies only when released. */
+	version?: VersionSource;
 	scheme?: string;
 	tagFormat?: string;
 	propagate?: Propagate;
@@ -25,7 +28,7 @@ export interface TallyConfig {
 	 * key `globalInputs: false` disables that plugin's default global inputs.
 	 */
 	plugins: Record<string, Record<string, unknown> | null>;
-	defaults?: { tagFormat?: string; propagate?: Propagate };
+	defaults?: { release?: boolean; tagFormat?: string; propagate?: Propagate };
 	/** Overlays keyed by unit root. */
 	units?: Record<string, UnitOverlay>;
 	deps?: DepConfig[];

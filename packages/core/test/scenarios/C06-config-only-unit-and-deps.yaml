@@ -2,7 +2,7 @@ description: An overlay without a discovered unit creates one; config deps add e
 config:
   plugins: { stub: {} }
   units:
-    infra/tf: { id: tf, version: tag }
+    infra/tf: { id: tf, release: true }
   deps:
     - { from: a, to: tf }
 plugins:
