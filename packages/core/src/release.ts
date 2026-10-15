@@ -123,35 +123,42 @@ const pickReleaseAs = <V>(
 };
 
 /**
- * Max level over the changes. While the major is 0, breaking changes use
+ * Level of one change. While the major is 0, breaking changes use
  * `preMajor.breaking` and changes whose type level is minor `preMajor.feat`.
  * An absorbed change contributes `bumps.absorbed` when its own level is set
  * (`minor` caps it at minor).
  */
+const changeLevel = (
+	{ change, via }: UnitChange,
+	settings: ReleaseSettings,
+	preMajor: boolean,
+): BumpLevel | null => {
+	const typed = settings.bumps.get(change.type) ?? null;
+	const level = change.breaking
+		? preMajor
+			? settings.preMajor.breaking
+			: "major"
+		: preMajor && typed === "minor"
+			? settings.preMajor.feat
+			: typed;
+
+	if (via === undefined || level === null) {
+		return level;
+	}
+
+	return settings.absorbed === "minor" && level !== "patch" ? "minor" : "patch";
+};
+
+/** Max level over the changes. */
 const ownBump = (
 	changes: readonly UnitChange[],
 	settings: ReleaseSettings,
 	preMajor: boolean,
 ): BumpLevel | null =>
-	changes.reduce<BumpLevel | null>((bump, { change, via }) => {
-		const typed = settings.bumps.get(change.type) ?? null;
-		const level = change.breaking
-			? preMajor
-				? settings.preMajor.breaking
-				: "major"
-			: preMajor && typed === "minor"
-				? settings.preMajor.feat
-				: typed;
-
-		if (via === undefined || level === null) {
-			return maxLevel(bump, level);
-		}
-
-		return maxLevel(
-			bump,
-			settings.absorbed === "minor" && level !== "patch" ? "minor" : "patch",
-		);
-	}, null);
+	changes.reduce<BumpLevel | null>(
+		(bump, change) => maxLevel(bump, changeLevel(change, settings, preMajor)),
+		null,
+	);
 
 /** Changes of the range attributed to the unit or to an absorbed unit. */
 const unitChanges = (
@@ -304,6 +311,9 @@ export interface BranchRule {
 	readonly name: string;
 	readonly line: "default" | "maintenance";
 	readonly channel: string | null;
+	/** Release item of the absolute maintenance check. */
+	readonly unit: string | null;
+	readonly group: string | null;
 }
 
 /** Release config with defaults applied. */
@@ -405,6 +415,8 @@ export const releaseSettings = (config: TallyConfig): ReleaseSettings => ({
 		name: b.name,
 		line: b.line,
 		channel: b.channel ?? null,
+		unit: b.unit ?? null,
+		group: b.group ?? null,
 	})),
 });
 
@@ -643,3 +655,5 @@ export const releaseGroup = <V>(
 		}),
 	};
 };
+
+export { changeLevel };

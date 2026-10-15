@@ -1,0 +1,33 @@
+description: >-
+  A Release-As value off the maintenance line is E_CAP naming the footer's
+  commit, even without a bump above the limit.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a crash\n\nRelease-As: 2.0.0"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.4.2, commit: c0 }
+    - { name: b-v3.0.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP
+  details:
+    unit: a
+    limit: minor
+    next: 2.0.0
+    commits: [{ sha: c1, subject: a crash }]

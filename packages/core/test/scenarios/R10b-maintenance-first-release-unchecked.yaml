@@ -1,0 +1,26 @@
+description: >-
+  A first release has no from, so neither limit applies: 1.0.0 on
+  release/2.x plans without an error.
+branch: release/2.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      message: "feat!: a"
+      files: { packages/a/index.ts: "0" }
+base: null
+plan: {}
+expect:
+  plan:
+    line: { maxBump: minor, absolute: { unit: a, major: 2 } }
+    units:
+      - { id: a, from: null, bump: major, next: 1.0.0 }
+    warnings: []

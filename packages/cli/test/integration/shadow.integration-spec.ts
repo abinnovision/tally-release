@@ -16,6 +16,7 @@ units:
   packages/b: { id: b, release: true }
 branches:
   - { name: main, line: default }
+  - { name: "release/{major}.{minor}.x", line: maintenance }
 `;
 
 const manifest = (a: string, b: string) =>
@@ -146,6 +147,26 @@ describe("shadow", () => {
 			"W_SHADOW_INPUT_MISSING",
 			"W_SHADOW_SKIPPED",
 		]);
+		expect(stderr).toMatch(/^warning\[W_SHADOW_SKIPPED\]: /m);
+	});
+
+	it("skips a release merge whose plan exceeds the line limit (G37)", async () => {
+		const { code, stderr, report } = await shadow(
+			["--strict", "--branch", "release/1.0.x"],
+			release("1.1.0", "1.1.0"),
+		);
+		expect(code).toBe(0);
+		expect(report).toMatchObject({
+			branch: "release/1.0.x",
+			skipped: {
+				reason: "cap",
+				message: expect.stringMatching(
+					/^unit "a": 1\.0\.0 to 1\.1\.0 exceeds the patch limit/u,
+				) as unknown,
+			},
+			rows: [],
+		});
+		expect(report.warnings.map((w) => w.code)).toEqual(["W_SHADOW_SKIPPED"]);
 		expect(stderr).toMatch(/^warning\[W_SHADOW_SKIPPED\]: /m);
 	});
 

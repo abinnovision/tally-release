@@ -373,3 +373,60 @@ describe("plan --head", () => {
 		}
 	});
 });
+
+describe("plan on a maintenance branch", () => {
+	/** release/1.x cut from web-v1.0.0 after main released web 2.0.0. */
+	const maintenance = (fix: string): Dag => ({
+		commits: [
+			{
+				id: "c0",
+				files: {
+					"tallyrelease.yaml": [
+						"units:",
+						"  apps/web: { id: web, release: true }",
+						"  apps/api: { id: api, release: true }",
+						"branches:",
+						"  - { name: main, line: default }",
+						"  - { name: 'release/{major}.x', line: maintenance, channel: 'rc-{major}', unit: web }",
+					].join("\n"),
+					"apps/web/a.ts": "0",
+					"apps/api/a.ts": "0",
+				},
+			},
+			{ id: "c1", message: "feat!: web v2", files: { "apps/web/a.ts": "1" } },
+			{
+				id: "c2",
+				parents: ["c0"],
+				message: "fix: api",
+				files: { "apps/api/a.ts": "2" },
+			},
+			{ id: "c3", message: fix, files: { "apps/web/a.ts": "3" } },
+		],
+		tags: [
+			{ name: "web-v1.0.0", commit: "c0" },
+			{ name: "api-v5.3.0", commit: "c0" },
+			{ name: "web-v2.0.0", commit: "c1" },
+		],
+	});
+
+	it("applies the relative limit on a branch cut from a tag (G22)", async () => {
+		const args = ["plan", "--base", "c0", "--branch", "release/1.x"];
+		const ok = await runCli(args, memoryRepo(maintenance("feat: web")));
+		expect(ok).toMatchObject({ code: 0, stderr: "" });
+		expect(ok.stdout).toContain(
+			"branch  release/1.x (rule release/{major}.x, maintenance line, channel rc-1, max bump minor, base 1.x of web)",
+		);
+		expect(ok.stdout).toContain(
+			"api   prerelease  5.3.0  patch  5.3.1  5.3.1-rc-1.2",
+		);
+		expect(ok.stdout).toContain(
+			"web   prerelease  1.0.0  minor  1.1.0  1.1.0-rc-1.2",
+		);
+
+		const capped = await runCli(args, memoryRepo(maintenance("feat!: web v2")));
+		expect(capped).toMatchObject({ code: 1, stdout: "" });
+		expect(capped.stderr).toBe(
+			'error[E_CAP]: unit "web": 1.0.0 to 2.0.0 exceeds the minor limit of branch rule "release/{major}.x"; commits: c3 web v2 (major)\n',
+		);
+	});
+});

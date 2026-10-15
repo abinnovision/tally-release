@@ -1,5 +1,7 @@
 import { TallyError } from "./errors.js";
+import { maxLevel } from "./util.js";
 
+import type { BumpLevel } from "./plugin.js";
 import type { BranchRule } from "./release.js";
 
 const SPECIAL = /[\\^$.*+?()[\]{}|/]/gu;
@@ -49,6 +51,29 @@ const compileRule = (rule: BranchRule): RegExp => {
 	return new RegExp(`^${source}$`, "u");
 };
 
+const within = (limit: "minor" | "patch", from: Core, next: Core) =>
+	next.major === from.major && (limit === "minor" || next.minor === from.minor);
+
+const itemLabel = ({ unit, group }: ReleaseItem) =>
+	unit === null ? `group "${group ?? ""}"` : `unit "${unit}"`;
+
+const itemDetails = ({ unit, group }: ReleaseItem) =>
+	unit === null ? { group } : { unit };
+
+/** `c3 web v2 (major)`, with `via` and Release-As when set. */
+const commitLabel = ({ sha, subject, level, via, releaseAs }: LimitCommit) => {
+	const notes = [
+		level === null
+			? undefined
+			: via === undefined
+				? level
+				: `${level} via ${via}`,
+		releaseAs && `Release-As ${releaseAs.version}`,
+	].filter((n) => n !== undefined);
+
+	return `${sha === undefined ? subject : `${sha} ${subject}`} (${notes.join(", ")})`;
+};
+
 /** The branch rule matching the planned branch. */
 export interface Line {
 	rule: string;
@@ -66,13 +91,27 @@ export interface Line {
 }
 
 /**
- * Validates rule names and channels: `E_BRANCH_RULE`, `E_CHANNEL_WILDCARD`,
+ * Validates rule names, `unit`/`group` and channels: `E_BRANCH_RULE`, `E_CHANNEL_WILDCARD`,
  * `E_CHANNEL_INVALID` and `E_CHANNEL_DUPLICATE`.
  */
 export const validateBranches = (rules: readonly BranchRule[]): void => {
 	const channels = new Map<string, string>();
 	for (const rule of rules) {
 		compileRule(rule);
+		if (rule.unit !== null && rule.group !== null) {
+			throw ruleError(rule, "sets both unit and group");
+		}
+
+		if (
+			(rule.unit !== null || rule.group !== null) &&
+			(rule.line !== "maintenance" || !rule.name.includes("{major}"))
+		) {
+			throw ruleError(
+				rule,
+				"sets unit or group without being a maintenance rule with {major}",
+			);
+		}
+
 		const { channel } = rule;
 		if (channel === null) {
 			continue;
@@ -113,10 +152,15 @@ export const validateBranches = (rules: readonly BranchRule[]): void => {
 	}
 };
 
-/** The first rule matching `branch`, or null. Rules must be validated. */
+/**
+ * The first rule matching `branch`, or null. Rules must be validated. A
+ * maintenance rule with `{major}` gets an absolute check for its `unit` or
+ * `group`, else for `single`, the repo's only release item.
+ */
 export const matchBranch = (
 	rules: readonly BranchRule[],
 	branch: string,
+	single: ReleaseItem | null = null,
 ): Line | null => {
 	for (const rule of rules) {
 		const match = compileRule(rule).exec(branch);
@@ -125,7 +169,12 @@ export const matchBranch = (
 		}
 
 		const captures: Record<string, string | undefined> = match.groups ?? {};
-		const maintenance = rule.line === "maintenance";
+		const { major, minor } = captures;
+		const capped = rule.line === "maintenance" && major !== undefined;
+		const target =
+			rule.unit !== null || rule.group !== null
+				? { unit: rule.unit, group: rule.group }
+				: single;
 
 		return {
 			rule: rule.name,
@@ -135,16 +184,126 @@ export const matchBranch = (
 					/\{(major|minor)\}/gu,
 					(_, token: string) => captures[token] ?? "",
 				) ?? null,
-			maxBump: !maintenance
-				? null
-				: captures["minor"] !== undefined
-					? "patch"
-					: captures["major"] !== undefined
-						? "minor"
-						: null,
-			absolute: null,
+			maxBump: !capped ? null : minor === undefined ? "minor" : "patch",
+			absolute:
+				!capped || target === null
+					? null
+					: {
+							...target,
+							major: Number(major),
+							...(minor === undefined ? {} : { minor: Number(minor) }),
+						},
 		};
 	}
 
 	return null;
+};
+
+/** An ungrouped released unit or a fixed group. */
+export interface ReleaseItem {
+	unit: string | null;
+	group: string | null;
+}
+
+/** Major and minor of a version. */
+export interface Core {
+	major: number;
+	minor: number;
+}
+
+/** A formatted version with its core. */
+export interface CoreVersion extends Core {
+	version: string;
+}
+
+/** A commit that contributes to a release item's `next`. */
+export interface LimitCommit {
+	sha?: string;
+	subject: string;
+	/** Null for a Release-As only commit. */
+	level: BumpLevel | null;
+	/** Absorbed unit the change came through. */
+	via?: string;
+	/** The Release-As value it sets. */
+	releaseAs?: CoreVersion;
+}
+
+export interface LimitItem extends ReleaseItem {
+	/** Null on a first release. */
+	from: CoreVersion | null;
+	/** Null without a pending release. */
+	next: CoreVersion | null;
+	commits: readonly LimitCommit[];
+}
+
+/**
+ * Maintenance limits: `E_CAP_BASE` when the absolute item's `from` is off the
+ * rule's line, `E_CAP` when a release item's `next` leaves the line of its
+ * `from`. First releases are not checked. `implicit`: the absolute target is
+ * the only release item, not named by the rule.
+ */
+export const checkLimits = (
+	line: Line | null,
+	items: readonly LimitItem[],
+	{ branch, implicit }: { branch: string; implicit: boolean },
+): void => {
+	const limit = line?.maxBump ?? null;
+	if (line === null || limit === null) {
+		return;
+	}
+
+	const { absolute } = line;
+	const target = items.find(
+		(i) =>
+			absolute !== null &&
+			i.unit === absolute.unit &&
+			i.group === absolute.group,
+	);
+	if (absolute !== null && target?.from) {
+		const { from } = target;
+		if (
+			from.major !== absolute.major ||
+			(absolute.minor !== undefined && from.minor !== absolute.minor)
+		) {
+			const expected = [absolute.major, absolute.minor ?? "x"].join(".");
+			throw new TallyError(
+				"E_CAP_BASE",
+				`branch "${branch}": ${itemLabel(target)}${implicit ? " (the only release item)" : ""} is at ${from.version}, off the ${expected} line of branch rule "${line.rule}"; the branch was cut from or merged with a commit carrying a newer tag, or names a next major, which maintenance rules do not support (use a default-line rule with a channel)`,
+				{
+					...itemDetails(target),
+					branch,
+					rule: line.rule,
+					major: absolute.major,
+					...(absolute.minor === undefined ? {} : { minor: absolute.minor }),
+					from: from.version,
+				},
+			);
+		}
+	}
+
+	for (const item of items) {
+		const { from, next } = item;
+		if (from === null || next === null || within(limit, from, next)) {
+			continue;
+		}
+
+		const commits = item.commits.filter(
+			(c) =>
+				(c.level !== null && maxLevel(c.level, limit) !== limit) ||
+				(c.releaseAs !== undefined && !within(limit, from, c.releaseAs)),
+		);
+		const listed = commits.map(commitLabel).join("; ");
+		throw new TallyError(
+			"E_CAP",
+			`${itemLabel(item)}: ${from.version} to ${next.version} exceeds the ${limit} limit of branch rule "${line.rule}"${listed === "" ? "" : `; commits: ${listed}`}`,
+			{
+				...itemDetails(item),
+				rule: line.rule,
+				limit,
+				from: from.version,
+				next: next.version,
+				commits,
+			},
+		);
+	}
 };

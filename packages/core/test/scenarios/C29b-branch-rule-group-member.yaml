@@ -1,0 +1,26 @@
+description: A rule naming a unit of a fixed group is E_BRANCH_RULE; the group must be named.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: tools, root: tools }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+    packages/b: { release: true }
+  groups:
+    sdk: { units: [a] }
+  branches:
+    - { name: "release/{major}.x", line: maintenance, unit: a }
+git:
+  commits:
+    - id: c0
+      files:
+        { packages/a/index.ts: "0", packages/b/index.ts: "0", tools/x.ts: "0" }
+base: null
+plan: {}
+error:
+  code: E_BRANCH_RULE
+  details: { rule: "release/{major}.x", unit: a }

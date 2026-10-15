@@ -10,8 +10,8 @@ import type { Workspace } from "./workspace.js";
 
 /**
  * Release-only checks, never run by `affected`: scheme registry, schemes, tag
- * formats and initial versions of released units, group members, branch rules
- * and channels. Returns the scheme registry.
+ * formats and initial versions of released units, group members, branch rules,
+ * their absolute check targets and channels. Returns the scheme registry.
  */
 export const validateRelease = (
 	workspace: Workspace,
@@ -68,6 +68,32 @@ export const validateRelease = (
 	}
 
 	validateBranches(workspace.release.branches);
+	const groupOf = new Map(
+		workspace.groups.flatMap((g) => g.members.map((id) => [id, g.name])),
+	);
+	for (const rule of workspace.release.branches) {
+		const { unit, group } = rule;
+		const problem =
+			unit !== null
+				? units.get(unit)?.version === "none" || !units.has(unit)
+					? `names unit "${unit}", which is not a released unit`
+					: groupOf.has(unit)
+						? `names unit "${unit}" of group "${groupOf.get(unit) ?? ""}"; use group`
+						: undefined
+				: group !== null && !workspace.groups.some((g) => g.name === group)
+					? `names unknown group "${group}"`
+					: undefined;
+		if (problem !== undefined) {
+			throw new TallyError(
+				"E_BRANCH_RULE",
+				`branch rule "${rule.name}" ${problem}`,
+				{
+					rule: rule.name,
+					...(unit === null ? { group } : { unit }),
+				},
+			);
+		}
+	}
 
 	return schemes;
 };

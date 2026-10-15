@@ -28,7 +28,7 @@ expect:
       kind: maintenance
       channel: rc-1
       maxBump: minor
-      absolute: null
+      absolute: { unit: a, group: null, major: 1 }
     units:
       - { id: a, kind: prerelease, next: 1.2.1, version: 1.2.1-rc-1.1 }
     warnings: []

@@ -8,7 +8,8 @@ const rule = (
 	name: string,
 	channel: string | null = null,
 	line: BranchRule["line"] = "maintenance",
-): BranchRule => ({ name, line, channel });
+	target: Partial<Pick<BranchRule, "unit" | "group">> = {},
+): BranchRule => ({ name, line, channel, unit: null, group: null, ...target });
 
 const code = (rules: BranchRule[]) => {
 	try {
@@ -33,6 +34,21 @@ describe("validateBranches", () => {
 		[[rule("a", "rc"), rule("b", "rc")], "E_CHANNEL_DUPLICATE"],
 		[[rule("release/{major}.x", "{major}")], "E_CHANNEL_INVALID"],
 		[[rule("main", "1")], "E_CHANNEL_INVALID"],
+		[
+			[rule("release/{major}.x", null, "maintenance", { unit: "a" })],
+			undefined,
+		],
+		[
+			[
+				rule("release/{major}.x", null, "maintenance", {
+					unit: "a",
+					group: "g",
+				}),
+			],
+			"E_BRANCH_RULE",
+		],
+		[[rule("release/*", null, "maintenance", { group: "g" })], "E_BRANCH_RULE"],
+		[[rule("main", null, "default", { unit: "a" })], "E_BRANCH_RULE"],
 	])("%j: %s", (rules, expected) => {
 		expect(code(rules)).toBe(expected);
 	});

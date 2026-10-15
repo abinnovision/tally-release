@@ -1,0 +1,50 @@
+description: >-
+  A release/1.x branch cut from 1.4.0 after main released 2.0.0 plans 1.5.0
+  within the minor limit; the only release item gets the absolute check.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+    - { name: "release/{major}.x", line: maintenance, channel: "rc-{major}" }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat!: a rewrite"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      parents: [c0]
+      message: "fix: a"
+      files: { packages/a/fix.ts: "2" }
+    - id: c3
+      message: "feat: a option"
+      files: { packages/a/fix.ts: "3" }
+  tags:
+    - { name: a-v1.4.0, commit: c0 }
+    - { name: a-v2.0.0, commit: c1 }
+base: c0
+plan: {}
+expect:
+  plan:
+    line:
+      rule: "release/{major}.x"
+      kind: maintenance
+      channel: rc-1
+      maxBump: minor
+      absolute: { unit: a, group: null, major: 1 }
+    units:
+      - id: a
+        kind: prerelease
+        baseTag: a-v1.4.0
+        from: 1.4.0
+        bump: minor
+        next: 1.5.0
+        version: 1.5.0-rc-1.2
+    warnings: []

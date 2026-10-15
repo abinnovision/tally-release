@@ -1,0 +1,36 @@
+description: >-
+  release/1.x with unit web does not block api at 5.3.0 from releasing
+  5.3.1: the absolute check covers web only, each item keeps its own from.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: web, root: apps/web }
+      - { id: api, root: apps/api }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.x", line: maintenance, unit: web }
+git:
+  commits:
+    - id: c0
+      files: { apps/web/index.ts: "0", apps/api/index.ts: "0" }
+    - id: c1
+      message: "fix: api"
+      files: { apps/api/index.ts: "1" }
+    - id: c2
+      message: "feat: web"
+      files: { apps/web/index.ts: "2" }
+  tags:
+    - { name: web-v1.0.0, commit: c0 }
+    - { name: api-v5.3.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    line: { maxBump: minor, absolute: { unit: web, group: null, major: 1 } }
+    units:
+      - { id: api, from: 5.3.0, next: 5.3.1 }
+      - { id: web, from: 1.0.0, next: 1.1.0 }
+    warnings: []
