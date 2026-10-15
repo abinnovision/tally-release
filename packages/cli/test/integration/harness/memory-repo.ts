@@ -25,6 +25,7 @@ export const memoryRepo = (dag: Dag): { git: RepoGit; fs: ReadonlyFs } => {
 				ids.findLast((id) => ancestor(id, a) && ancestor(id, b)),
 			isShallow: () => false,
 			branch: () => "main",
+			defaultBranch: () => undefined,
 		},
 		fs: memoryFs(base.tree("HEAD")),
 	};

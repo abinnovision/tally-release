@@ -4,12 +4,54 @@ import { resolve } from "node:path";
 
 import { resolveBuildBase } from "../ci/base.js";
 import { affectedGithubOutput } from "../ci/outputs.js";
+import { alignColumns } from "../output/columns.js";
+import { count } from "../output/count.js";
+import { painter } from "../output/paint.js";
 import { version } from "../version.js";
 
+import type { BuildBase } from "../ci/base.js";
 import type { Session } from "../session.js";
+import type { AffectedDoc, AffectedReason } from "@tallyrelease/core";
+
+const GROUPS: readonly AffectedReason[] = [
+	"all",
+	"global",
+	"direct",
+	"dependent",
+];
+
+const baseLabel = (base: BuildBase): string => {
+	switch (base.source) {
+		case "cli":
+			return `--base ${base.ref ?? ""}`;
+		case "push-before":
+			return "push before";
+		case "pr-merge-base":
+			return "merge base with the PR target";
+		case "merge-group":
+			return "merge group base";
+		case "forge-last-success":
+			return "last successful run";
+		case "local-merge-base":
+			return `merge base with ${base.ref ?? ""}`;
+		case "none":
+			return "everything is affected";
+	}
+};
+
+const tsv = (doc: AffectedDoc): string =>
+	[
+		"id\tpath\treason\tvia",
+		...doc.units.map((u) =>
+			[u.id, u.path, u.reason, u.via.join(",")].join("\t"),
+		),
+	]
+		.map((line) => `${line}\n`)
+		.join("");
 
 export interface AffectedFlags {
 	base?: string;
+	format?: "text" | "json" | "tsv";
 	json?: boolean;
 	out?: string;
 	githubOutput?: boolean;
@@ -33,6 +75,7 @@ export const affected = async (
 	const base = await resolveBuildBase({
 		git,
 		head,
+		env: session.env,
 		cliBase: flags.base,
 		github,
 		forge: session.forge,
@@ -68,17 +111,62 @@ export const affected = async (
 		appendFileSync(path, affectedGithubOutput(doc));
 	}
 
-	if (flags.json) {
+	const format = flags.format ?? (flags.json ? "json" : "text");
+	if (format === "json") {
 		session.stdout.write(json);
 
 		return;
 	}
 
-	session.stdout.write(
-		`base: ${doc.build.base ?? "none"} (${doc.build.baseSource})\n`,
-	);
-	for (const u of doc.units) {
-		const via = u.via.length > 0 ? ` via ${u.via.join(", ")}` : "";
-		session.stdout.write(`${u.id}\t${u.path}\t${u.reason}${via}\n`);
+	if (format === "tsv") {
+		session.stdout.write(tsv(doc));
+
+		return;
 	}
+
+	const paint = painter(session.stdout);
+	const released = new Set(
+		workspace.units.filter((u) => u.version !== "none").map((u) => u.id),
+	);
+	const rows = alignColumns(
+		doc.units.map((u) => [
+			u.id,
+			u.path,
+			u.via.length > 0 ? `via ${u.via.join(", ")}` : "",
+			released.has(u.id) ? "released" : "",
+		]),
+		{ indent: 2, styles: [undefined, "dim", "dim", "cyan"] },
+		paint,
+	);
+	const sha = doc.build.base?.slice(0, 7) ?? "none";
+	const lines = [
+		`${paint("bold", "base")}  ${paint("yellow", sha)} ${paint("dim", `(${baseLabel(base)})`)}`,
+		"",
+	];
+	for (const group of GROUPS) {
+		const members = rows.filter((_, i) => doc.units[i]?.reason === group);
+		if (members.length > 0) {
+			lines.push(paint("bold", `${group} (${String(members.length)})`));
+			if (group === "global") {
+				lines.push(`  changed: ${doc.build.globalInputs.join(", ")}`);
+			}
+
+			lines.push(...members);
+		}
+	}
+
+	if (doc.units.length > 0) {
+		lines.push("");
+	}
+
+	const outside =
+		doc.unattributed.length > 0
+			? `, ${count(doc.unattributed.length, "file")} outside any unit`
+			: "";
+	lines.push(
+		doc.units.length > 0
+			? `${String(doc.units.length)} of ${count(workspace.units.length, "unit")} affected${outside}`
+			: `no units affected${outside}`,
+	);
+	session.stdout.write(`${lines.join("\n")}\n`);
 };

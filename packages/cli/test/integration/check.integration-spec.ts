@@ -16,7 +16,7 @@ describe("check", () => {
 		});
 		expect(ok).toEqual({
 			code: 0,
-			stdout: "ok: 2 units (0 released), 1 edges\n",
+			stdout: "ok: 2 units (0 released), 1 edge\n",
 			stderr: "",
 		});
 
@@ -38,7 +38,7 @@ describe("check", () => {
 			// eslint-disable-next-line no-await-in-loop -- sequential cases
 			const result = await check(files);
 			expect(result.code).toBe(1);
-			expect(result.stderr).toMatch(new RegExp(`^${code}: `));
+			expect(result.stderr).toMatch(new RegExp(`^error\\[${code}\\]: `));
 		}
 	});
 
@@ -49,7 +49,7 @@ describe("check", () => {
 		});
 		expect(result.code).toBe(1);
 		expect(result.stderr).toMatch(
-			/^E_CONFIG: .*units\.a\.version: .*use release: false/,
+			/^error\[E_CONFIG\]: .*units\.a\.version: .*use release: false/,
 		);
 	});
 
@@ -71,7 +71,7 @@ describe("check", () => {
 			"tallyrelease.yaml": "units:\n  a: { version: file }\n",
 			"a/x": "",
 		});
-		expect(none.stdout).toBe("ok: 1 units (0 released), 0 edges\n");
+		expect(none.stdout).toBe("ok: 1 unit (0 released), 0 edges\n");
 	});
 
 	it("reads --config relative to --cwd", async () => {

@@ -11,6 +11,7 @@ export type BaseSource =
 	| "pr-merge-base"
 	| "merge-group"
 	| "forge-last-success"
+	| "local-merge-base"
 	| "none";
 
 export type AffectedReason = "direct" | "dependent" | "global" | "all";

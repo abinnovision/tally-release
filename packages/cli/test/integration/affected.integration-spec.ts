@@ -69,7 +69,7 @@ describe("affected", () => {
 		expect(noToken.build).toEqual({ base: "p2", source: "push-before" });
 		expect(noToken.ids).toEqual(["api"]);
 		expect(noToken.warnings).toEqual(["W_NO_FORGE"]);
-		expect(noToken.stderr).toContain("W_NO_FORGE: ");
+		expect(noToken.stderr).toContain("warning[W_NO_FORGE]: ");
 
 		// A rerun after HEAD succeeded: lastSuccess is not an ancestor of before.
 		const rerun = await affected([], {
@@ -178,7 +178,7 @@ describe("affected", () => {
 			...memoryRepo(dag),
 		});
 		expect(unresolved.code).toBe(1);
-		expect(unresolved.stderr).toMatch(/^E_BASE_UNRESOLVED: /);
+		expect(unresolved.stderr).toMatch(/^error\[E_BASE_UNRESOLVED\]: /);
 	});
 
 	it("writes $GITHUB_OUTPUT and --out (G09)", async () => {
@@ -284,7 +284,7 @@ describe("affected", () => {
 		expect(result.build).toEqual({ base: "p2", source: "push-before" });
 		expect(result.warnings).toEqual(["W_FORGE_ERROR"]);
 		expect(result.stderr).toContain(
-			"W_FORGE_ERROR: forge request failed (502)",
+			"warning[W_FORGE_ERROR]: forge request failed (502)",
 		);
 	});
 

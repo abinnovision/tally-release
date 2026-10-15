@@ -7,6 +7,7 @@ import { githubForge } from "./forge/github.js";
 import { nodeFs } from "./fs-ctx.js";
 import { git as runGit } from "./git/exec.js";
 import { gitReader } from "./git/reader.js";
+import { painter } from "./output/paint.js";
 import { builtinPlugins } from "./plugins/index.js";
 
 import type { Env, GithubContext } from "./ci/github-env.js";
@@ -131,9 +132,10 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 			});
 		},
 		warn: (warnings) => {
+			const paint = painter(deps.stderr);
 			for (const w of warnings) {
 				deps.stderr.write(
-					`${w.code}: ${w.plugin ? `${w.plugin}: ` : ""}${w.message}\n`,
+					`${paint("yellow", `warning[${w.code}]`)}: ${w.plugin ? `${w.plugin}: ` : ""}${w.message}\n`,
 				);
 			}
 		},

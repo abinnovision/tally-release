@@ -1,3 +1,5 @@
+import { count } from "../output/count.js";
+
 import type { Session } from "../session.js";
 
 /** Validates config, plugins, units and graph. */
@@ -9,6 +11,6 @@ export const check = async (session: Session): Promise<void> => {
 		.map((u) => u.id);
 	const list = released.length > 0 ? `: ${released.join(", ")}` : "";
 	session.stdout.write(
-		`ok: ${String(workspace.units.length)} units (${String(released.length)} released${list}), ${String(workspace.graph.edges.length)} edges\n`,
+		`ok: ${count(workspace.units.length, "unit")} (${String(released.length)} released${list}), ${count(workspace.graph.edges.length, "edge")}\n`,
 	);
 };

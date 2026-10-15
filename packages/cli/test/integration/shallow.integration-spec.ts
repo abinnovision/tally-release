@@ -37,7 +37,7 @@ describe("shallow clone", () => {
 				cwd,
 			});
 			expect(flag.code).toBe(1);
-			expect(flag.stderr).toMatch(/^E_SHALLOW_BASE: /);
+			expect(flag.stderr).toMatch(/^error\[E_SHALLOW_BASE\]: /);
 
 			// eslint-disable-next-line no-await-in-loop -- sequential cases
 			const pushed = await runCli(["affected"], {
@@ -45,7 +45,7 @@ describe("shallow clone", () => {
 				event: { name: "push", payload: { before: repo.sha("c1") } },
 			});
 			expect(pushed.code).toBe(1);
-			expect(pushed.stderr).toMatch(/^E_SHALLOW_BASE: /);
+			expect(pushed.stderr).toMatch(/^error\[E_SHALLOW_BASE\]: /);
 		}
 	});
 
@@ -60,7 +60,9 @@ describe("shallow clone", () => {
 			event: { name: "push", payload: { before: repo.sha("c0") } },
 		});
 		expect(pushed.code).toBe(1);
-		expect(pushed.stderr).toMatch(/^E_SHALLOW_BASE: .*no history in common/);
+		expect(pushed.stderr).toMatch(
+			/^error\[E_SHALLOW_BASE\]: .*no history in common/,
+		);
 
 		const pr = await runCli(["affected"], {
 			cwd: shallow,
@@ -70,7 +72,9 @@ describe("shallow clone", () => {
 			},
 		});
 		expect(pr.code).toBe(1);
-		expect(pr.stderr).toMatch(/^E_SHALLOW_BASE: .*no history in common/);
+		expect(pr.stderr).toMatch(
+			/^error\[E_SHALLOW_BASE\]: .*no history in common/,
+		);
 	});
 
 	it("resolves bases present in the shallow clone", async () => {
