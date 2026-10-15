@@ -1,0 +1,60 @@
+description: >-
+  Plan equality holds when every marker release equals the plan's release and
+  every item the marker touches is complete; pending items outside the marker
+  are ignored, an empty marker never equals.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        { packages/a/i.ts: "0", packages/b/i.ts: "0", packages/c/i.ts: "0" }
+    - id: c1
+      message: "feat: a and c"
+      files: { packages/a/i.ts: "1", packages/c/i.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  markers:
+    equal:
+      - { id: a, version: 1.1.0, tag: a-v1.1.0 }
+      - { id: b, version: 1.1.0, tag: b-v1.1.0 }
+      - { id: c, version: 1.1.0, tag: c-v1.1.0 }
+    version:
+      - { id: a, version: 1.1.0, tag: a-v1.1.0 }
+      - { id: b, version: 1.1.0, tag: b-v1.1.0 }
+      - { id: c, version: 1.0.1, tag: c-v1.0.1 }
+    tag:
+      - { id: c, version: 1.1.0, tag: c-1.1.0 }
+    member-missing:
+      - { id: a, version: 1.1.0, tag: a-v1.1.0 }
+      - { id: c, version: 1.1.0, tag: c-v1.1.0 }
+    group-outside:
+      - { id: c, version: 1.1.0, tag: c-v1.1.0 }
+    not-pending:
+      - { id: x, version: 1.0.0, tag: x-v1.0.0 }
+    empty: []
+expect:
+  equals:
+    equal: true
+    version: false
+    tag: false
+    member-missing: false
+    group-outside: true
+    not-pending: false
+    empty: false

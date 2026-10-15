@@ -21,8 +21,15 @@ interface Entry {
 	initialVersion?: string | undefined;
 }
 
+/** Escapes glob metacharacters so a root matches literally. */
+const escapeGlob = (path: string): string =>
+	path.replace(/[[\]{}()!*?+@\\]/g, "\\$&");
+
+const isInside = (path: string, root: string): boolean =>
+	path !== root && (root === "." || path.startsWith(`${root}/`));
+
 /** Drops `.` and empty segments; rejects absolute roots and `..` segments. */
-const normalizeRoot = (root: string): string => {
+export const normalizeRoot = (root: string): string => {
 	const segments = root.split("/");
 	if (root.startsWith("/") || segments.includes("..")) {
 		throw new TallyError(
@@ -34,13 +41,6 @@ const normalizeRoot = (root: string): string => {
 
 	return segments.filter((s) => s !== "" && s !== ".").join("/") || ".";
 };
-
-/** Escapes glob metacharacters so a root matches literally. */
-const escapeGlob = (path: string): string =>
-	path.replace(/[[\]{}()!*?+@\\]/g, "\\$&");
-
-const isInside = (path: string, root: string): boolean =>
-	path !== root && (root === "." || path.startsWith(`${root}/`));
 
 /**
  * Runs `discover` hooks in config order, applies config overlays and fills

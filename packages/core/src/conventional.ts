@@ -109,6 +109,11 @@ export const conventionalCommits: IntentSource = {
 		commits.map((commit): Change => {
 			const parsed = parseCommit(commit.message);
 			const values = parsed.footers["release-as"] ?? [];
+			// The last breaking footer wins, as in release-please.
+			const notes = [
+				...(parsed.footers["breaking change"] ?? []),
+				...(parsed.footers["breaking-change"] ?? []),
+			].at(-1);
 
 			return {
 				sha: commit.sha,
@@ -117,6 +122,7 @@ export const conventionalCommits: IntentSource = {
 				...(parsed.scope === undefined ? {} : { scope: parsed.scope }),
 				subject: parsed.subject,
 				...(parsed.body === undefined ? {} : { body: parsed.body }),
+				...(notes === undefined ? {} : { notes }),
 				...(parsed.pr === undefined ? {} : { pr: parsed.pr }),
 				...(values.length === 0 ? {} : { releaseAs: values.map(releaseAs) }),
 			};

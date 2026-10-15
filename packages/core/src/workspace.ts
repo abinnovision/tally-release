@@ -139,7 +139,7 @@ export const loadWorkspace = async (
 		warnings: [...warnings, ...graph.warnings],
 		schemes: collectSchemes(active),
 		intents,
-		release: releaseSettings(input.config),
+		release: releaseSettings(input.config, units),
 		groups,
 	};
 };

@@ -52,6 +52,15 @@ export const compileTagFormat = (format: string, unitId: string): TagFormat => {
 	};
 };
 
+/** The unit's tag for `version`. */
+export const renderTag = (
+	unit: Pick<Unit, "id" | "tagFormat">,
+	version: string,
+): string =>
+	unit.tagFormat
+		.replaceAll("{id}", unit.id)
+		.replace("{version}", () => version);
+
 /** Tags of a released unit and its scheme. */
 export interface UnitTags {
 	readonly scheme: VersionScheme<any>;

@@ -1,5 +1,8 @@
 import type { BumpLevel, Propagate, VersionSource } from "./plugin.js";
 
+/** Release PR of a release item: the shared PR or its own. */
+export type ReleasePrMode = "shared" | "separate";
+
 /** Config overlay for the unit at a root; creates a config-only unit if none is discovered. */
 export interface UnitOverlay {
 	id?: string;
@@ -16,6 +19,8 @@ export interface UnitOverlay {
 	tags?: string[];
 	/** First release version, parsed by the unit's scheme. */
 	initialVersion?: string;
+	/** Ungrouped released units only; default `defaults.releasePr`. */
+	releasePr?: ReleasePrMode;
 }
 
 /** A branch rule; the first rule whose `name` matches the branch wins. */
@@ -46,6 +51,8 @@ export interface GroupConfig {
 	units?: string[];
 	/** Selects released units with any of these tags. */
 	tags?: string[];
+	/** Default `defaults.releasePr`. */
+	releasePr?: ReleasePrMode;
 }
 
 export interface DepConfig {
@@ -67,6 +74,8 @@ export interface TallyConfig {
 		tagFormat?: string;
 		propagate?: Propagate;
 		initialVersion?: string;
+		/** Default `shared`. */
+		releasePr?: ReleasePrMode;
 	};
 	/** Overlays keyed by unit root. */
 	units?: Record<string, UnitOverlay>;
@@ -77,6 +86,10 @@ export interface TallyConfig {
 	bumps?: BumpsConfig;
 	/** Fixed groups by name; names follow the unit id pattern. */
 	groups?: Record<string, GroupConfig>;
+	tags?: {
+		/** Floating tag formats with `{id}`, `{major}` and `{minor}`. */
+		floating?: string[];
+	};
 }
 
 /** Global input owned by core. */

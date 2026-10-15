@@ -1,0 +1,41 @@
+description: >-
+  A group with releasePr separate is one item holding all members with the
+  group version and every member's tag.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b], releasePr: separate }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        { packages/a/i.ts: "0", packages/b/i.ts: "0", packages/c/i.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/i.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release: {}
+expect:
+  items:
+    - name: sdk
+      kind: group
+      mode: separate
+      units: [a, b]
+      version: 1.1.0
+      tags:
+        - { id: a, tag: a-v1.1.0 }
+        - { id: b, tag: b-v1.1.0 }

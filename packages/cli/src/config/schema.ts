@@ -20,6 +20,11 @@ const initialVersion = z.string().meta({
 
 const bumpLevel = z.enum(["major", "minor", "patch"]);
 
+const releasePr = z.enum(["shared", "separate"]).meta({
+	description:
+		"Release PR of the release item: shared (one PR for all shared items) or separate (its own PR).",
+});
+
 const unitId = z.string().regex(/^(?!\.\.?$)[A-Za-z0-9._-]+$/);
 const groupUnits = z.array(unitId).meta({ description: "Member unit ids." });
 const groupTags = z
@@ -75,6 +80,12 @@ const unitOverlay = z.strictObject({
 		})
 		.exactOptional(),
 	initialVersion: initialVersion.exactOptional(),
+	releasePr: releasePr
+		.meta({
+			description:
+				"Release PR of this ungrouped unit; set it on the group for grouped units. Defaults to defaults.releasePr.",
+		})
+		.exactOptional(),
 });
 
 /** Schema of `tallyrelease.yaml`. */
@@ -102,6 +113,12 @@ export const configSchema = z.strictObject({
 			tagFormat: tagFormat.exactOptional(),
 			propagate: propagate.exactOptional(),
 			initialVersion: initialVersion.exactOptional(),
+			releasePr: releasePr
+				.meta({
+					description:
+						"Release PR of every release item: shared (default) or separate.",
+				})
+				.exactOptional(),
 		})
 		.meta({ description: "Defaults applied to every unit." })
 		.exactOptional(),
@@ -211,10 +228,12 @@ export const configSchema = z.strictObject({
 				z.strictObject({
 					units: groupUnits,
 					tags: groupTags.exactOptional(),
+					releasePr: releasePr.exactOptional(),
 				}),
 				z.strictObject({
 					units: groupUnits.exactOptional(),
 					tags: groupTags,
+					releasePr: releasePr.exactOptional(),
 				}),
 			]),
 		)
@@ -226,6 +245,18 @@ export const configSchema = z.strictObject({
 				"Fixed groups by name (unit id characters): members release together with one version. Each group needs units, tags or both.",
 			minProperties: 1,
 		})
+		.exactOptional(),
+	tags: z
+		.strictObject({
+			floating: z
+				.array(z.string())
+				.meta({
+					description:
+						"Floating tag formats moved to the highest stable release they render for; tokens {id}, {major} and {minor}.",
+				})
+				.exactOptional(),
+		})
+		.meta({ description: "Tags beyond the version tag of each release." })
 		.exactOptional(),
 }) satisfies z.ZodType<TallyConfig>;
 
