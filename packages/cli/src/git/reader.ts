@@ -32,12 +32,12 @@ export const gitReader = (
 	cwd: string,
 	debug?: (message: string) => void,
 ): RepoGit => {
-	const ok = (args: string[]) => gitOk(cwd, args, debug);
+	const ok = (args: string[]) => gitOk(cwd, args, { debug });
 	const resolve = async (ref: string) => {
 		const result = await run(
 			cwd,
 			["rev-parse", "--verify", "--quiet", `${ref}^{commit}`],
-			debug,
+			{ debug },
 		);
 
 		return result.code === 0 ? result.stdout.trim() : undefined;
@@ -93,11 +93,9 @@ export const gitReader = (
 		tags: () => tagRefs([]),
 		tagsMerged: (ref) => tagRefs([`--merged=${ref}`]),
 		isAncestor: async (a, b) => {
-			const result = await run(
-				cwd,
-				["merge-base", "--is-ancestor", a, b],
+			const result = await run(cwd, ["merge-base", "--is-ancestor", a, b], {
 				debug,
-			);
+			});
 			if (result.code > 1) {
 				throw new Error(`git merge-base failed: ${result.stderr.trim()}`);
 			}
@@ -173,7 +171,7 @@ export const gitReader = (
 			).sort(),
 		resolve,
 		mergeBase: async (a, b) => {
-			const result = await run(cwd, ["merge-base", a, b], debug);
+			const result = await run(cwd, ["merge-base", a, b], { debug });
 
 			return result.code === 0 ? result.stdout.trim() : undefined;
 		},
@@ -183,7 +181,7 @@ export const gitReader = (
 			const result = await run(
 				cwd,
 				["symbolic-ref", "--quiet", "--short", "HEAD"],
-				debug,
+				{ debug },
 			);
 
 			return result.code === 0 ? result.stdout.trim() : undefined;
@@ -192,7 +190,7 @@ export const gitReader = (
 			const result = await run(
 				cwd,
 				["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-				debug,
+				{ debug },
 			);
 
 			return result.code === 0 ? result.stdout.trim() : undefined;

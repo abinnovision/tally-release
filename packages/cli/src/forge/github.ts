@@ -1,6 +1,30 @@
 import { Octokit } from "@octokit/rest";
 
-import type { Forge } from "./forge.js";
+import { LABELS } from "./forge.js";
+
+import type { Forge, ReleasePr, RepoRef } from "./forge.js";
+
+const LABEL_COLORS: Readonly<Record<string, string>> = {
+	[LABELS.pending]: "fbca04",
+	[LABELS.released]: "0e8a16",
+	[LABELS.stale]: "d93f0b",
+};
+
+/** Resolves `undefined` when the request fails with one of `statuses`. */
+const unless = async <T>(
+	request: Promise<T>,
+	...statuses: number[]
+): Promise<T | undefined> => {
+	try {
+		return await request;
+	} catch (error) {
+		if (statuses.includes((error as { status?: number }).status ?? 0)) {
+			return undefined;
+		}
+
+		throw error;
+	}
+};
 
 export interface GithubForgeOptions {
 	token: string;
@@ -15,10 +39,43 @@ export const githubForge = (opts: GithubForgeOptions): Forge => {
 		baseUrl: opts.baseUrl ?? "https://api.github.com",
 	});
 
+	const comment = async (repo: RepoRef, number: number, body: string) => {
+		await octokit.rest.issues.createComment({
+			...repo,
+			issue_number: number,
+			body,
+		});
+	};
+
+	// 404: removed concurrently.
+	const removeLabel = async (repo: RepoRef, number: number, name: string) => {
+		await unless(
+			octokit.rest.issues.removeLabel({ ...repo, issue_number: number, name }),
+			404,
+		);
+	};
+
+	const ensureLabel = async (repo: RepoRef, name: string) => {
+		if (await unless(octokit.rest.issues.getLabel({ ...repo, name }), 404)) {
+			return;
+		}
+
+		// 422: created concurrently.
+		await unless(
+			octokit.rest.issues.createLabel({
+				...repo,
+				name,
+				color: LABEL_COLORS[name] ?? "ededed",
+			}),
+			422,
+		);
+	};
+
 	return {
 		lastSuccessfulPushRuns: async ({ owner, repo, workflow, branch }) => {
-			try {
-				const { data } = await octokit.rest.actions.listWorkflowRuns({
+			// A renamed or deleted workflow has no runs to build on.
+			const runs = await unless(
+				octokit.rest.actions.listWorkflowRuns({
 					owner,
 					repo,
 					workflow_id: workflow,
@@ -26,17 +83,144 @@ export const githubForge = (opts: GithubForgeOptions): Forge => {
 					status: "success",
 					event: "push",
 					per_page: 100,
-				});
+				}),
+				404,
+			);
 
-				return data.workflow_runs.map((run) => run.head_sha);
-			} catch (error) {
-				// A renamed or deleted workflow has no runs to build on.
-				if ((error as { status?: unknown }).status === 404) {
-					return [];
+			return runs?.data.workflow_runs.map((run) => run.head_sha) ?? [];
+		},
+		// Issues API: label listing has no search index lag.
+		releasePrs: async (repo, { base, state }) => {
+			const issues = await octokit.paginate(octokit.rest.issues.listForRepo, {
+				...repo,
+				labels: LABELS.pending,
+				state: state === "open" ? "open" : "closed",
+				sort: "created",
+				direction: "asc",
+				per_page: 100,
+			});
+			const pulls = [];
+			for (const issue of issues) {
+				if (issue.pull_request !== undefined) {
+					// eslint-disable-next-line no-await-in-loop -- sequential, avoids secondary rate limits
+					const { data } = await octokit.rest.pulls.get({
+						...repo,
+						pull_number: issue.number,
+					});
+					pulls.push(data);
 				}
-
-				throw error;
 			}
+
+			return pulls
+				.filter(
+					(pr) =>
+						pr.base.ref === base && (state === "open" || pr.merged_at !== null),
+				)
+				.map((pr): ReleasePr => ({
+					number: pr.number,
+					head: pr.head.ref,
+					headSha: pr.head.sha,
+					base: pr.base.ref,
+					body: pr.body ?? "",
+					labels: pr.labels.map((l) => l.name),
+					mergedAt: pr.merged_at,
+					mergeCommitSha: pr.merged_at === null ? null : pr.merge_commit_sha,
+				}))
+				.sort((a, b) =>
+					state === "open" || a.mergedAt === b.mergedAt
+						? a.number - b.number
+						: (a.mergedAt ?? "") < (b.mergedAt ?? "")
+							? -1
+							: 1,
+				);
+		},
+		createPr: async (repo, pr) =>
+			(await octokit.rest.pulls.create({ ...repo, ...pr })).data.number,
+		updatePr: async (repo, number, update) => {
+			await octokit.rest.pulls.update({
+				...repo,
+				pull_number: number,
+				...update,
+			});
+		},
+		closePr: async (repo, number, body) => {
+			await comment(repo, number, body);
+			await octokit.rest.pulls.update({
+				...repo,
+				pull_number: number,
+				state: "closed",
+			});
+			// Closed PRs leave the pending queue; 404: label already gone.
+			await removeLabel(repo, number, LABELS.pending);
+		},
+		setLabel: async (repo, number, { label, comment: body }) => {
+			const { data: current } = await octokit.rest.issues.listLabelsOnIssue({
+				...repo,
+				issue_number: number,
+				per_page: 100,
+			});
+			await Promise.all(
+				current
+					.filter((l) => l.name.startsWith("tallyrelease:") && l.name !== label)
+					.map(async ({ name }) => {
+						await removeLabel(repo, number, name);
+					}),
+			);
+
+			if (!current.some((l) => l.name === label)) {
+				await ensureLabel(repo, label);
+				await octokit.rest.issues.addLabels({
+					...repo,
+					issue_number: number,
+					labels: [label],
+				});
+			}
+
+			if (body !== undefined) {
+				await comment(repo, number, body);
+			}
+		},
+		branchSha: async (repo, branch) =>
+			(
+				await unless(
+					octokit.rest.git.getRef({ ...repo, ref: `heads/${branch}` }),
+					404,
+				)
+			)?.data.object.sha,
+		prForCommit: async (repo, sha) => {
+			const prs = await unless(
+				octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+					...repo,
+					commit_sha: sha,
+				}),
+				404,
+				422,
+			);
+			// Rebase merges record only the last rebased commit as merge commit.
+			const pr =
+				prs?.data.find((p) => p.merge_commit_sha === sha) ??
+				prs?.data.find((p) => p.merged_at !== null);
+
+			return pr && { number: pr.number, labels: pr.labels.map((l) => l.name) };
+		},
+		releaseByTag: async (repo, tag) => {
+			const release = await unless(
+				octokit.rest.repos.getReleaseByTag({ ...repo, tag }),
+				404,
+			);
+
+			return release && { id: release.data.id, url: release.data.html_url };
+		},
+		createRelease: async (repo, { tag, name, body, makeLatest }) => {
+			const { data } = await octokit.rest.repos.createRelease({
+				...repo,
+				tag_name: tag,
+				name,
+				body,
+				make_latest: makeLatest ? "true" : "false",
+			});
+
+			return { id: data.id, url: data.html_url };
 		},
 	};
 };

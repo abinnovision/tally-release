@@ -1,6 +1,13 @@
 import { computePlan, loadWorkspace, TallyError } from "@tallyrelease/core";
-import { existsSync } from "node:fs";
-import { basename, relative, resolve, sep } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
 
 import { githubContext } from "./ci/github-env.js";
 import { loadConfig } from "./config/load.js";
@@ -8,12 +15,14 @@ import { githubForge } from "./forge/github.js";
 import { gitBlob, gitTreeFs, nodeFs } from "./fs-ctx.js";
 import { git as runGit } from "./git/exec.js";
 import { gitReader } from "./git/reader.js";
+import { gitWriter } from "./git/writer.js";
 import { painter } from "./output/paint.js";
 import { builtinPlugins } from "./plugins/index.js";
 
 import type { Env, GithubContext } from "./ci/github-env.js";
 import type { Forge } from "./forge/forge.js";
 import type { RepoGit } from "./git/reader.js";
+import type { GitWriter } from "./git/writer.js";
 import type {
 	Plan,
 	PlanOptions,
@@ -40,6 +49,12 @@ export interface Deps {
 	fsAt?: (ref: string) => ReadonlyFs;
 	/** Defaults to GitHub when a token is available; used only with a token. */
 	forge?: Forge;
+	/** Defaults to the `git` executable at the repo root. */
+	gitWriter?: GitWriter;
+	/** Writes a file relative to the repo root; defaults to `node:fs`. */
+	writeFile?: (path: string, content: string) => void;
+	/** Defaults to the system clock. */
+	clock?: () => Date;
 }
 
 export interface GlobalOptions {
@@ -60,6 +75,11 @@ export interface Session {
 	readonly github: GithubContext | undefined;
 	/** Undefined without a token. */
 	readonly forge: Forge | undefined;
+	/** `--token`, else `GITHUB_TOKEN`. */
+	readonly token: string | undefined;
+	readonly gitWriter: GitWriter;
+	readonly writeFile: (path: string, content: string) => void;
+	readonly clock: () => Date;
 	readonly workspace: () => Promise<Workspace>;
 	/** Content of `path` at commit `ref`, undefined when absent. */
 	readonly readAt: (ref: string, path: string) => string | undefined;
@@ -108,7 +128,7 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 		const result = await runGit(
 			root,
 			["rev-parse", "--show-toplevel", "--show-prefix"],
-			debug,
+			{ debug },
 		);
 		if (result.code !== 0) {
 			throw new TallyError("E_NOT_A_REPO", `not a git repository: ${root}`, {
@@ -134,7 +154,9 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 		}
 
 		if (onDisk) {
-			const origin = await runGit(root, ["remote", "get-url", "origin"], debug);
+			const origin = await runGit(root, ["remote", "get-url", "origin"], {
+				debug,
+			});
 			const name =
 				origin.code === 0
 					? /([^/:]+?)(?:\.git)?\/*$/.exec(origin.stdout.trim())?.[1]
@@ -183,6 +205,30 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 		forge: token
 			? (deps.forge ?? githubForge({ token, baseUrl: github?.apiUrl }))
 			: undefined,
+		token,
+		gitWriter: deps.gitWriter ?? gitWriter(root, debug),
+		writeFile:
+			deps.writeFile ??
+			((path, content) => {
+				const file = resolve(root, path);
+				const rel = relative(root, file);
+				if (
+					rel === "" ||
+					rel === ".." ||
+					rel.startsWith(`..${sep}`) ||
+					isAbsolute(rel)
+				) {
+					throw new TallyError(
+						"E_PATH_OUTSIDE_ROOT",
+						`"${path}" is outside the repository root`,
+						{ path },
+					);
+				}
+
+				mkdirSync(dirname(file), { recursive: true });
+				writeFileSync(file, content);
+			}),
+		clock: deps.clock ?? (() => new Date()),
 		workspace: async () =>
 			await workspaceAt(null, (workspace) => Promise.resolve(workspace)),
 		readAt: (ref, path) =>

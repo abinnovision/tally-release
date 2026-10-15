@@ -1,17 +1,291 @@
-import type { Forge, WorkflowRunQuery } from "../../../src/index.js";
+import { TallyError } from "@tallyrelease/core";
+import { createHash } from "node:crypto";
 
-/** `Forge` serving canned successful run head shas; records queries. */
+import type {
+	Forge,
+	GitWriter,
+	NewRelease,
+	ReleasePr,
+	WorkflowRunQuery,
+} from "../../../src/index.js";
+import type { Dag } from "@tallyrelease/core/testing";
+
+const pr = (remote: { prs: FakePr[] }, number: number): FakePr => {
+	const found = remote.prs.find((p) => p.number === number);
+	if (!found) {
+		throw Object.assign(new Error(`no PR #${String(number)}`), {
+			status: 404,
+		});
+	}
+
+	return found;
+};
+
+export interface FakePr extends ReleasePr {
+	title: string;
+	state: "open" | "closed";
+	comments: string[];
+}
+
+/** Remote repository and forge state shared by `fakeForge` and `fakeGitWriter`. */
+export interface MemoryRemote {
+	/** Commits made by `fakeGitWriter`, with the files they change. */
+	commits: Map<
+		string,
+		{ parent: string; files: Record<string, string>; message: string }
+	>;
+	/** Branch name to commit id. */
+	branches: Map<string, string>;
+	/** Pushed tags: name to commit id. */
+	tags: Map<string, string>;
+	prs: FakePr[];
+	releases: (NewRelease & { id: number })[];
+	/** Forge and writer calls in order: method name, then arguments. */
+	calls: [string, ...unknown[]][];
+}
+
+export const memoryRemote = (): MemoryRemote => ({
+	commits: new Map(),
+	branches: new Map(),
+	tags: new Map(),
+	prs: [],
+	releases: [],
+	calls: [],
+});
+
+/** In-memory `Forge` over `remote`; serves canned run head shas and records queries. */
 export const fakeForge = (
 	runs: string[] = [],
-): Forge & { queries: WorkflowRunQuery[] } => {
+	remote: MemoryRemote = memoryRemote(),
+): Forge & { queries: WorkflowRunQuery[]; remote: MemoryRemote } => {
 	const queries: WorkflowRunQuery[] = [];
+	const call = (method: string, ...args: unknown[]) => {
+		remote.calls.push([method, ...args]);
+	};
 
 	return {
 		queries,
+		remote,
 		lastSuccessfulPushRuns: async (query) => {
 			queries.push(query);
 
 			return await Promise.resolve(runs);
 		},
+		releasePrs: async (_repo, { base, state }) => {
+			const prs = remote.prs
+				.filter(
+					(p) =>
+						p.base === base &&
+						p.labels.includes("tallyrelease: pending") &&
+						(state === "open" ? p.state === "open" : p.mergedAt !== null),
+				)
+				.sort((a, b) =>
+					state === "open"
+						? a.number - b.number
+						: (a.mergedAt ?? "").localeCompare(b.mergedAt ?? ""),
+				);
+
+			return await Promise.resolve(
+				prs.map(({ title: _t, state: _s, comments: _c, ...p }) => ({
+					...p,
+					labels: [...p.labels],
+				})),
+			);
+		},
+		createPr: async (_repo, { head, base, title, body }) => {
+			call("createPr", { head, base, title });
+			if (remote.prs.some((p) => p.head === head && p.state === "open")) {
+				throw Object.assign(
+					new Error(`A pull request already exists for ${head}`),
+					{ status: 422 },
+				);
+			}
+
+			const number = remote.prs.length + 1;
+			remote.prs.push({
+				number,
+				head,
+				headSha: remote.branches.get(head) ?? "",
+				base,
+				title,
+				body,
+				labels: [],
+				state: "open",
+				comments: [],
+				mergedAt: null,
+				mergeCommitSha: null,
+			});
+
+			return await Promise.resolve(number);
+		},
+		updatePr: async (_repo, number, update) => {
+			call("updatePr", number, update);
+			Object.assign(pr(remote, number), update);
+			await Promise.resolve();
+		},
+		closePr: async (_repo, number, comment) => {
+			call("closePr", number);
+			const p = pr(remote, number);
+			p.comments.push(comment);
+			p.state = "closed";
+			await Promise.resolve();
+		},
+		setLabel: async (_repo, number, { label, comment }) => {
+			call("setLabel", number, label);
+			const p = pr(remote, number);
+			p.labels = [
+				...p.labels.filter((l) => !l.startsWith("tallyrelease:")),
+				label,
+			];
+			if (comment !== undefined) {
+				p.comments.push(comment);
+			}
+
+			await Promise.resolve();
+		},
+		branchSha: async (_repo, branch) =>
+			await Promise.resolve(remote.branches.get(branch)),
+		prForCommit: async (_repo, sha) => {
+			const p = remote.prs.find((c) => c.mergeCommitSha === sha);
+
+			return await Promise.resolve(
+				p && { number: p.number, labels: [...p.labels] },
+			);
+		},
+		releaseByTag: async (_repo, name) => {
+			const release = remote.releases.find((r) => r.tag === name);
+
+			return await Promise.resolve(
+				release && { id: release.id, url: `release/${release.tag}` },
+			);
+		},
+		createRelease: async (_repo, release) => {
+			call("createRelease", release);
+			const id = remote.releases.length + 1;
+			remote.releases.push({ ...release, id });
+
+			return await Promise.resolve({ id, url: `release/${release.tag}` });
+		},
+	};
+};
+
+/**
+ * `GitWriter` over `remote`; commit ids are hashes of the inputs. `tags` are
+ * the run's local tags; `push` copies the pushed ones to the remote.
+ */
+export const fakeGitWriter = (
+	remote: MemoryRemote,
+): GitWriter & { tags: Map<string, string> } => {
+	const tags = new Map<string, string>();
+	const localTag = (name: string) => tags.get(name) ?? remote.tags.get(name);
+
+	return {
+		tags,
+		commitFiles: async ({ parent, files, message, date }) => {
+			const entries = [...files].sort(([a], [b]) => (a < b ? -1 : 1));
+			const id = createHash("sha1")
+				.update(JSON.stringify([parent, entries, message, date]))
+				.digest("hex");
+			remote.commits.set(id, {
+				parent,
+				files: Object.fromEntries(entries),
+				message,
+			});
+
+			return await Promise.resolve(id);
+		},
+		tag: async (name, sha, opts) => {
+			const current = localTag(name);
+			if (current !== undefined && current !== sha && opts?.force !== true) {
+				throw new TallyError("E_TAG_EXISTS", `tag "${name}" exists`, {
+					tag: name,
+				});
+			}
+
+			tags.set(name, sha);
+			await Promise.resolve();
+		},
+		// Every push is atomic here: leases and tags are checked before any ref changes.
+		push: async (refspecs, opts = {}) => {
+			remote.calls.push(["push", refspecs, opts]);
+			for (const [ref, expected] of Object.entries(opts.leases ?? {})) {
+				const branch = ref.replace(/^refs\/heads\//, "");
+				if ((remote.branches.get(branch) ?? "") !== expected) {
+					throw new TallyError("E_PUSH_LEASE", `stale lease on ${ref}`, {
+						refspecs,
+					});
+				}
+			}
+
+			const updates = refspecs.map((spec) => {
+				const [src = "", dst = src] = spec.replace(/^\+/, "").split(":");
+				const sha = src.startsWith("refs/tags/")
+					? localTag(src.slice("refs/tags/".length))
+					: src;
+				const current = remote.tags.get(dst.slice("refs/tags/".length));
+				if (
+					dst.startsWith("refs/tags/") &&
+					current !== undefined &&
+					current !== sha &&
+					!spec.startsWith("+")
+				) {
+					throw new TallyError("E_TAG_EXISTS", `remote tag ${dst} exists`, {
+						refspecs,
+					});
+				}
+
+				return { sha, dst };
+			});
+
+			for (const { sha, dst } of updates) {
+				if (dst.startsWith("refs/tags/")) {
+					remote.tags.set(dst.slice("refs/tags/".length), sha ?? "");
+				} else if (sha === "" || sha === undefined) {
+					remote.branches.delete(dst.slice("refs/heads/".length));
+				} else {
+					const branch = dst.slice("refs/heads/".length);
+					remote.branches.set(branch, sha);
+					for (const p of remote.prs) {
+						if (p.head === branch && p.state === "open") {
+							p.headSha = sha;
+						}
+					}
+				}
+			}
+
+			await Promise.resolve();
+		},
+	};
+};
+
+/**
+ * `dag` plus a squash merge of PR `number` (its head commit's files on top
+ * of HEAD, id `merge-<number>`); marks the PR merged.
+ */
+export const mergePr = (
+	dag: Dag,
+	remote: MemoryRemote,
+	number: number,
+): Dag => {
+	const p = pr(remote, number);
+	const head = remote.commits.get(p.headSha);
+	const id = `merge-${String(number)}`;
+	p.state = "closed";
+	p.mergedAt = new Date(
+		Date.UTC(2025, 0, 1, 0, dag.commits.length),
+	).toISOString();
+	p.mergeCommitSha = id;
+
+	return {
+		...dag,
+		commits: [
+			...dag.commits,
+			{
+				id,
+				message: `${p.title} (#${String(number)})\n\n${p.body}`,
+				date: p.mergedAt,
+				files: head?.files ?? {},
+			},
+		],
 	};
 };

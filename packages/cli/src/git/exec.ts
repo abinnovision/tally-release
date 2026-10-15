@@ -1,5 +1,11 @@
 import { execFile } from "node:child_process";
 
+export interface GitOptions {
+	debug?: ((message: string) => void) | undefined;
+	/** Added to the process environment. */
+	env?: Readonly<Record<string, string>>;
+}
+
 export interface GitResult {
 	code: number;
 	stdout: string;
@@ -10,7 +16,7 @@ export interface GitResult {
 export const git = (
 	cwd: string,
 	args: readonly string[],
-	debug?: (message: string) => void,
+	{ debug, env }: GitOptions = {},
 ): Promise<GitResult> => {
 	debug?.(`git ${args.join(" ")}`);
 
@@ -18,7 +24,12 @@ export const git = (
 		execFile(
 			"git",
 			["-c", "core.quotePath=false", ...args],
-			{ cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+			{
+				cwd,
+				encoding: "utf8",
+				maxBuffer: 256 * 1024 * 1024,
+				...(env && { env: { ...process.env, ...env } }),
+			},
 			(error, stdout, stderr) => {
 				if (error === null) {
 					resolve({ code: 0, stdout, stderr });
@@ -36,9 +47,9 @@ export const git = (
 export const gitOk = async (
 	cwd: string,
 	args: readonly string[],
-	debug?: (message: string) => void,
+	opts?: GitOptions,
 ): Promise<string> => {
-	const result = await git(cwd, args, debug);
+	const result = await git(cwd, args, opts);
 	if (result.code !== 0) {
 		throw new Error(
 			`git ${args.join(" ")} failed (${String(result.code)}): ${result.stderr.trim()}`,

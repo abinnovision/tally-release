@@ -1,35 +1,55 @@
 import { createServer } from "node:http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { githubForge } from "../../src/forge/github.js";
 
 import type { IncomingHttpHeaders, Server } from "node:http";
 
+interface Request {
+	/** Method and decoded path, for example `GET /repos/acme/repo/pulls/1`. */
+	route: string;
+	query: Record<string, string>;
+	headers: IncomingHttpHeaders;
+	body: unknown;
+}
+
 describe("github forge", () => {
-	const requests: { url: string; headers: IncomingHttpHeaders }[] = [];
+	const repo = { owner: "acme", repo: "repo" };
+	let requests: Request[] = [];
+	/**
+	 * Route (optionally with `?page=<n>`) to status, JSON body and extra
+	 * headers; unlisted routes are 404.
+	 */
+	let routes: Record<string, [number, unknown, Record<string, string>?]> = {};
 	let server: Server;
 	let baseUrl = "";
 
+	const routesOf = () => requests.map((r) => r.route);
+
 	beforeAll(async () => {
 		server = createServer((req, res) => {
-			requests.push({ url: req.url ?? "", headers: req.headers });
-			const found = req.url?.startsWith(
-				"/repos/acme/repo/actions/workflows/ci.yaml/",
-			);
-			const broken = req.url?.includes("/broken.yaml/");
-			res.writeHead(found ? 200 : broken ? 502 : 404, {
-				"content-type": "application/json",
+			let raw = "";
+			req.on("data", (chunk: Buffer) => (raw += chunk.toString("utf8")));
+			req.on("end", () => {
+				const url = new URL(req.url ?? "", "http://localhost");
+				const route = `${req.method ?? ""} ${decodeURIComponent(url.pathname)}`;
+				requests.push({
+					route,
+					query: Object.fromEntries(url.searchParams),
+					headers: req.headers,
+					body: raw === "" ? undefined : JSON.parse(raw),
+				});
+				const page = url.searchParams.get("page");
+				const [status, body, headers] = (page === null
+					? undefined
+					: routes[`${route}?page=${page}`]) ??
+					routes[route] ?? [404, { message: "Not Found" }];
+				res.writeHead(status, {
+					"content-type": "application/json",
+					...headers,
+				});
+				res.end(JSON.stringify(body));
 			});
-			res.end(
-				JSON.stringify(
-					found
-						? {
-								total_count: 2,
-								workflow_runs: [{ head_sha: "b" }, { head_sha: "a" }],
-							}
-						: { message: "Not Found" },
-				),
-			);
 		});
 		await new Promise<void>((resolve) => {
 			server.listen(0, "127.0.0.1", resolve);
@@ -38,25 +58,31 @@ describe("github forge", () => {
 		baseUrl = `http://127.0.0.1:${String(typeof address === "object" ? address?.port : "")}`;
 	});
 
+	beforeEach(() => {
+		requests = [];
+		routes = {};
+	});
+
 	afterAll(() => {
 		server.close();
 	});
 
 	it("lists successful push runs via GITHUB_API_URL (G14)", async () => {
-		const forge = githubForge({ token: "secret", baseUrl });
-		const query = {
-			owner: "acme",
-			repo: "repo",
-			workflow: "ci.yaml",
-			branch: "main",
+		routes = {
+			"GET /repos/acme/repo/actions/workflows/ci.yaml/runs": [
+				200,
+				{
+					total_count: 2,
+					workflow_runs: [{ head_sha: "b" }, { head_sha: "a" }],
+				},
+			],
+			"GET /repos/acme/repo/actions/workflows/broken.yaml/runs": [502, {}],
 		};
+		const forge = githubForge({ token: "secret", baseUrl });
+		const query = { ...repo, workflow: "ci.yaml", branch: "main" };
 
 		expect(await forge.lastSuccessfulPushRuns(query)).toEqual(["b", "a"]);
-		const url = new URL(requests[0]?.url ?? "", baseUrl);
-		expect(url.pathname).toBe(
-			"/repos/acme/repo/actions/workflows/ci.yaml/runs",
-		);
-		expect(Object.fromEntries(url.searchParams)).toEqual({
+		expect(requests[0]?.query).toEqual({
 			branch: "main",
 			status: "success",
 			event: "push",
@@ -74,5 +100,267 @@ describe("github forge", () => {
 		await expect(
 			forge.lastSuccessfulPushRuns({ ...query, workflow: "broken.yaml" }),
 		).rejects.toMatchObject({ status: 502 });
+	});
+
+	describe("release effects (G38)", () => {
+		const forge = () => githubForge({ token: "secret", baseUrl });
+		const pull = (
+			number: number,
+			base: string,
+			mergedAt: string | null = null,
+		) => ({
+			number,
+			head: {
+				ref: `tallyrelease/release/${base}/shared`,
+				sha: `h${String(number)}`,
+			},
+			base: { ref: base },
+			body: `body ${String(number)}`,
+			labels: [{ name: "tallyrelease: pending" }],
+			merged_at: mergedAt,
+			merge_commit_sha: `m${String(number)}`,
+		});
+
+		it("lists release PRs through the issues API", async () => {
+			routes = {
+				"GET /repos/acme/repo/issues": [
+					200,
+					[1, 2, 3, 4, 5, 6].map((number) => ({
+						number,
+						...(number !== 3 && { pull_request: {} }),
+					})),
+				],
+				"GET /repos/acme/repo/pulls/1": [200, pull(1, "main")],
+				"GET /repos/acme/repo/pulls/2": [200, pull(2, "release/1.x")],
+				"GET /repos/acme/repo/pulls/4": [
+					200,
+					pull(4, "main", "2026-01-02T00:00:00Z"),
+				],
+				"GET /repos/acme/repo/pulls/5": [
+					200,
+					pull(5, "main", "2026-01-01T00:00:00Z"),
+				],
+				"GET /repos/acme/repo/pulls/6": [200, pull(6, "main")],
+			};
+
+			const open = await forge().releasePrs(repo, {
+				base: "main",
+				state: "open",
+			});
+			expect(requests[0]?.query).toEqual({
+				labels: "tallyrelease: pending",
+				state: "open",
+				sort: "created",
+				direction: "asc",
+				per_page: "100",
+			});
+			expect(routesOf()).not.toContain("GET /repos/acme/repo/pulls/3");
+			// The fake issues list ignores state; the adapter filters by merge.
+			expect(open.map((p) => p.number)).toEqual([1, 4, 5, 6]);
+			expect(open[0]).toEqual({
+				number: 1,
+				head: "tallyrelease/release/main/shared",
+				headSha: "h1",
+				base: "main",
+				body: "body 1",
+				labels: ["tallyrelease: pending"],
+				mergedAt: null,
+				mergeCommitSha: null,
+			});
+
+			requests = [];
+			const merged = await forge().releasePrs(repo, {
+				base: "main",
+				state: "merged",
+			});
+			expect(requests[0]?.query["state"]).toBe("closed");
+			expect(merged.map((p) => [p.number, p.mergeCommitSha])).toEqual([
+				[5, "m5"],
+				[4, "m4"],
+			]);
+		});
+
+		it("follows pagination of the issues list", async () => {
+			routes = {
+				"GET /repos/acme/repo/issues": [
+					200,
+					[{ number: 1, pull_request: {} }],
+					{
+						link: `<${baseUrl}/repos/acme/repo/issues?labels=x&page=2>; rel="next", <${baseUrl}/repos/acme/repo/issues?labels=x&page=2>; rel="last"`,
+					},
+				],
+				"GET /repos/acme/repo/issues?page=2": [
+					200,
+					[{ number: 2, pull_request: {} }],
+				],
+				"GET /repos/acme/repo/pulls/1": [200, pull(1, "main")],
+				"GET /repos/acme/repo/pulls/2": [200, pull(2, "main")],
+			};
+
+			const open = await forge().releasePrs(repo, {
+				base: "main",
+				state: "open",
+			});
+			expect(open.map((p) => p.number)).toEqual([1, 2]);
+			expect(routesOf()).toEqual([
+				"GET /repos/acme/repo/issues",
+				"GET /repos/acme/repo/issues",
+				"GET /repos/acme/repo/pulls/1",
+				"GET /repos/acme/repo/pulls/2",
+			]);
+		});
+
+		it("creates, updates and closes PRs", async () => {
+			routes = {
+				"POST /repos/acme/repo/pulls": [201, { number: 7 }],
+				"PATCH /repos/acme/repo/pulls/7": [200, {}],
+				"POST /repos/acme/repo/issues/7/comments": [201, {}],
+			};
+			const pr = {
+				head: "tallyrelease/release/main/shared",
+				base: "main",
+				title: "chore(release): cli@1.0.0",
+				body: "b",
+			};
+
+			expect(await forge().createPr(repo, pr)).toBe(7);
+			await forge().updatePr(repo, 7, { body: "c" });
+			await forge().closePr(repo, 7, "nothing to release");
+
+			expect(requests.map((r) => [r.route, r.body])).toEqual([
+				["POST /repos/acme/repo/pulls", pr],
+				["PATCH /repos/acme/repo/pulls/7", { body: "c" }],
+				[
+					"POST /repos/acme/repo/issues/7/comments",
+					{ body: "nothing to release" },
+				],
+				["PATCH /repos/acme/repo/pulls/7", { state: "closed" }],
+				// Unrouted (404): the label is already gone, which is fine.
+				[
+					"DELETE /repos/acme/repo/issues/7/labels/tallyrelease: pending",
+					undefined,
+				],
+			]);
+		});
+
+		it("sets a label, creating it when missing", async () => {
+			routes = {
+				"GET /repos/acme/repo/issues/7/labels": [
+					200,
+					[{ name: "tallyrelease: pending" }, { name: "bug" }],
+				],
+				"DELETE /repos/acme/repo/issues/7/labels/tallyrelease: pending": [
+					200,
+					[],
+				],
+				"POST /repos/acme/repo/labels": [201, {}],
+				"POST /repos/acme/repo/issues/7/labels": [200, []],
+				"POST /repos/acme/repo/issues/7/comments": [201, {}],
+			};
+
+			await forge().setLabel(repo, 7, {
+				label: "tallyrelease: stale",
+				comment: "plan changed",
+			});
+
+			expect(requests.map((r) => [r.route, r.body])).toEqual([
+				["GET /repos/acme/repo/issues/7/labels", undefined],
+				[
+					"DELETE /repos/acme/repo/issues/7/labels/tallyrelease: pending",
+					undefined,
+				],
+				["GET /repos/acme/repo/labels/tallyrelease: stale", undefined],
+				[
+					"POST /repos/acme/repo/labels",
+					{ name: "tallyrelease: stale", color: "d93f0b" },
+				],
+				[
+					"POST /repos/acme/repo/issues/7/labels",
+					{ labels: ["tallyrelease: stale"] },
+				],
+				["POST /repos/acme/repo/issues/7/comments", { body: "plan changed" }],
+			]);
+
+			// Already labelled and no comment: read only.
+			requests = [];
+			routes["GET /repos/acme/repo/issues/7/labels"] = [
+				200,
+				[{ name: "tallyrelease: stale" }],
+			];
+			await forge().setLabel(repo, 7, { label: "tallyrelease: stale" });
+			expect(routesOf()).toEqual(["GET /repos/acme/repo/issues/7/labels"]);
+		});
+
+		it("answers lookups and treats 404 as absent", async () => {
+			routes = {
+				"GET /repos/acme/repo/git/ref/heads/tallyrelease/release/main/shared": [
+					200,
+					{ object: { sha: "s1" } },
+				],
+				"GET /repos/acme/repo/commits/m9/pulls": [
+					200,
+					[
+						{ number: 8, merge_commit_sha: "x", merged_at: null, labels: [] },
+						{
+							number: 9,
+							merge_commit_sha: "m9",
+							merged_at: "2026-01-01T00:00:00Z",
+							labels: [{ name: "tallyrelease: released" }],
+						},
+					],
+				],
+				"GET /repos/acme/repo/commits/bad/pulls": [422, {}],
+				"GET /repos/acme/repo/releases/tags/cli-v1.0.0": [
+					200,
+					{ id: 3, html_url: "https://example/r/3" },
+				],
+			};
+			const f = forge();
+
+			expect(await f.branchSha(repo, "tallyrelease/release/main/shared")).toBe(
+				"s1",
+			);
+			expect(await f.branchSha(repo, "gone")).toBeUndefined();
+			expect(await f.prForCommit(repo, "m9")).toEqual({
+				number: 9,
+				labels: ["tallyrelease: released"],
+			});
+			expect(await f.prForCommit(repo, "bad")).toBeUndefined();
+			expect(await f.prForCommit(repo, "unknown")).toBeUndefined();
+			expect(await f.releaseByTag(repo, "cli-v1.0.0")).toEqual({
+				id: 3,
+				url: "https://example/r/3",
+			});
+			expect(await f.releaseByTag(repo, "cli-v2.0.0")).toBeUndefined();
+
+			routes["GET /repos/acme/repo/releases/tags/broken"] = [500, {}];
+			await expect(f.releaseByTag(repo, "broken")).rejects.toMatchObject({
+				status: 500,
+			});
+		});
+
+		it("creates a release", async () => {
+			routes = {
+				"POST /repos/acme/repo/releases": [
+					201,
+					{ id: 4, html_url: "https://example/r/4" },
+				],
+			};
+
+			expect(
+				await forge().createRelease(repo, {
+					tag: "cli-v1.0.1",
+					name: "cli: v1.0.1",
+					body: "notes",
+					makeLatest: false,
+				}),
+			).toEqual({ id: 4, url: "https://example/r/4" });
+			expect(requests[0]?.body).toEqual({
+				tag_name: "cli-v1.0.1",
+				name: "cli: v1.0.1",
+				body: "notes",
+				make_latest: "false",
+			});
+		});
 	});
 });
