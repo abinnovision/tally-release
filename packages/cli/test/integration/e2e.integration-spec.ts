@@ -1,6 +1,8 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { createRepo, git, removeTmpDirs } from "./harness/git-repo.js";
+import { createRepo, git, removeTmpDirs, tmpDir } from "./harness/git-repo.js";
 import { runCli } from "./harness/run-cli.js";
 import { affectedDocSchema } from "../../src/affected-schema.js";
 
@@ -126,5 +128,21 @@ describe("e2e", () => {
 		const result = await runCli(["check", "--cwd", "sub"], { cwd: dir });
 		expect(result.code).toBe(1);
 		expect(result.stderr).toMatch(/^error\[E_NOT_REPO_ROOT\]: /);
+	});
+
+	it("rejects a missing directory and a non-repository", async () => {
+		const { dir } = createRepo({
+			commits: [{ id: "c0", files: { "tallyrelease.yaml": "plugins: {}\n" } }],
+		});
+
+		const missing = await runCli(["check", "--cwd", "nope"], { cwd: dir });
+		expect(missing.code).toBe(1);
+		expect(missing.stderr).toMatch(/^error\[E_CWD_MISSING\]: /);
+
+		const plain = tmpDir("plain");
+		writeFileSync(join(plain, "tallyrelease.yaml"), "plugins: {}\n");
+		const result = await runCli(["affected"], { cwd: plain });
+		expect(result.code).toBe(1);
+		expect(result.stderr).toMatch(/^error\[E_NOT_A_REPO\]: /);
 	});
 });

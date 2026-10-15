@@ -11,10 +11,8 @@ export const loadConfig = (fs: ReadonlyFs, path: string): TallyConfig => {
 	if (text === undefined) {
 		throw new TallyError(
 			"E_CONFIG_MISSING",
-			`config file "${path}" not found`,
-			{
-				path,
-			},
+			`config file "${path}" not found; create it, for example: plugins: { node: {} }`,
+			{ path },
 		);
 	}
 
