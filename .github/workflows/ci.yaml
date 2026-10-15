@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+## If Merge Group is enabled
+#  merge_group:
+#    types:
+#      - checks_requested
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.number || github.event.merge_group.id || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+
+permissions: {}
+
+jobs:
+  ci:
+    name: CI
+    uses: abinnovision/actions/.github/workflows/workflow.yaml@app-stack-v1
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+      id-token: write
+    with:
+      prerelease-channel: "beta"
+      test-types: "unit,integration"
+      source-units: ""
+      dist-units: "packages/*"
+
+  self-check:
+    name: Self check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn build
+      - name: tallyrelease check
+        run: node packages/cli/dist/bin.js check
+      - name: tallyrelease affected
+        run: node packages/cli/dist/bin.js affected --github-output
+
+  publish-npm:
+    name: Publish npm
+    needs: ci
+    uses: abinnovision/actions/.github/workflows/workflow.yaml@publish-npm-v1
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
+    with:
+      releases: ${{ needs.ci.outputs.releases }}
+      npm: true
+      include: packages/*

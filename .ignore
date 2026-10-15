@@ -1,0 +1,13 @@
+# Search-tool ignore rules (ripgrep, fd, and the agents' search tools).
+# These rules take precedence over .gitignore; git itself never reads this file.
+
+# oh-my-opencode-slim: agent state stays git-local (.slim/ is gitignored) but
+# must remain readable to the agents' search tools. The parent negation re-opens
+# the subtree; the deepwork entries match the skill's expected rules exactly.
+!.slim/
+!.slim/deepwork/
+!.slim/deepwork/**
+
+# Lockfile: committed but huge; noise for text search. Still searchable via an
+# explicit path (rg pattern yarn.lock) or --no-ignore.
+yarn.lock
