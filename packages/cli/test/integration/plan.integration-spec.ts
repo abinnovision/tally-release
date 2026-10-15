@@ -122,7 +122,7 @@ describe("plan", () => {
 		).toBeTruthy();
 
 		const missing = await run(["plan", "--github-output"]);
-		expect(missing.stderr).toMatch(/^error\[E_GITHUB_OUTPUT\]: /);
+		expect(missing.stderr).toMatch(/^error\[E_GITHUB_OUTPUT\]: /m);
 	});
 
 	it("prints a table and matches affected (G30)", async () => {

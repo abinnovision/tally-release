@@ -126,7 +126,8 @@ export const withReleased = async (
 			: [
 					{
 						code: "W_RELEASED_NO_BASE",
-						message: `the build base is unknown; released lists only releases at HEAD, not ${String(omitted)} earlier on the first-parent chain`,
+						message:
+							"the build base is unknown; released leaves out earlier releases on the first-parent chain",
 					},
 				];
 

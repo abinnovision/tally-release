@@ -9,6 +9,7 @@ import { graph } from "./commands/graph.js";
 import { plan } from "./commands/plan.js";
 import { releasePrs } from "./commands/pr.js";
 import { reconcile } from "./commands/release.js";
+import { run } from "./commands/run.js";
 import { shadow } from "./commands/shadow.js";
 import { applyVersions } from "./commands/version.js";
 import { painter } from "./output/paint.js";
@@ -21,6 +22,7 @@ import type { GraphFlags } from "./commands/graph.js";
 import type { PlanFlags } from "./commands/plan.js";
 import type { PrFlags } from "./commands/pr.js";
 import type { ReleaseFlags } from "./commands/release.js";
+import type { RunFlags } from "./commands/run.js";
 import type { ShadowFlags } from "./commands/shadow.js";
 import type { VersionFlags } from "./commands/version.js";
 import type { Deps, GlobalOptions } from "./session.js";
@@ -192,7 +194,32 @@ export const main = async (
 		.option("--branch <name>", "plan for this branch (default: current)")
 		.option("--dry-run", "print the actions without tagging or editing PRs")
 		.action(async (flags: ReleaseFlags) => {
-			await reconcile(session(), flags);
+			await reconcile(session(), flags, {
+				command: "release",
+				ready: async () => {
+					await Promise.resolve();
+				},
+			});
+		});
+	program
+		.command("run")
+		.description(
+			"tag merged release PRs, plan HEAD, update release PRs and write the plan",
+		)
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--base <ref>", "diff against this ref")
+		.option(
+			"--dry-run",
+			"print the actions without tagging, pushing or editing PRs",
+		)
+		.option("--out <file>", "write the plan to a file")
+		.option("--github-output", "append outputs to $GITHUB_OUTPUT")
+		.option(
+			"--summary",
+			"write markdown to $GITHUB_STEP_SUMMARY, else print it instead of the table",
+		)
+		.action(async (flags: RunFlags) => {
+			await run(session(), flags);
 		});
 
 	try {

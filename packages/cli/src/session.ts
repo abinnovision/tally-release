@@ -1,4 +1,9 @@
-import { computePlan, loadWorkspace, TallyError } from "@tallyrelease/core";
+import {
+	computePlan,
+	loadWorkspace,
+	TallyError,
+	withReleased,
+} from "@tallyrelease/core";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import {
 	basename,
@@ -94,10 +99,14 @@ export interface Session {
 		ref: string | null,
 		use: (workspace: Workspace, fs: ReadonlyFs) => Promise<T>,
 	) => Promise<T>;
-	/** `computePlan` with the workspace and files of `workspaceAt(ref)`. */
+	/**
+	 * `computePlan` with the workspace and files of `workspaceAt(ref)`;
+	 * `fill.released` fills `released` (`withReleased`).
+	 */
 	readonly planAt: (
 		ref: string | null,
 		opts: Omit<PlanOptions, "fs">,
+		fill?: { released: boolean },
 	) => Promise<Plan>;
 	readonly warn: (warnings: readonly Warning[]) => void;
 }
@@ -289,16 +298,18 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 		readAt: (ref, path) =>
 			deps.fsAt ? deps.fsAt(ref).read(path) : gitBlob(root, ref, path),
 		workspaceAt,
-		planAt: async (ref, opts) =>
-			await workspaceAt(
-				ref,
-				async (workspace, files) =>
-					await computePlan(workspace, repoGit, {
-						...opts,
-						fs: files,
-						...(debug && { debug }),
-					}),
-			),
+		planAt: async (ref, opts, fill) =>
+			await workspaceAt(ref, async (workspace, files) => {
+				const plan = await computePlan(workspace, repoGit, {
+					...opts,
+					fs: files,
+					...(debug && { debug }),
+				});
+
+				return fill?.released
+					? await withReleased(workspace, plan, { git: repoGit })
+					: plan;
+			}),
 		warn: (warnings) => {
 			const paint = painter(deps.stderr);
 			for (const w of warnings) {
