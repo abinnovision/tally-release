@@ -8,6 +8,7 @@ import { explain } from "./commands/explain.js";
 import { graph } from "./commands/graph.js";
 import { plan } from "./commands/plan.js";
 import { releasePrs } from "./commands/pr.js";
+import { reconcile } from "./commands/release.js";
 import { shadow } from "./commands/shadow.js";
 import { applyVersions } from "./commands/version.js";
 import { painter } from "./output/paint.js";
@@ -19,6 +20,7 @@ import type { ExplainFlags } from "./commands/explain.js";
 import type { GraphFlags } from "./commands/graph.js";
 import type { PlanFlags } from "./commands/plan.js";
 import type { PrFlags } from "./commands/pr.js";
+import type { ReleaseFlags } from "./commands/release.js";
 import type { ShadowFlags } from "./commands/shadow.js";
 import type { VersionFlags } from "./commands/version.js";
 import type { Deps, GlobalOptions } from "./session.js";
@@ -183,6 +185,14 @@ export const main = async (
 		.option("--dry-run", "print the actions without pushing or editing PRs")
 		.action(async (flags: PrFlags) => {
 			await releasePrs(session(), flags);
+		});
+	program
+		.command("release")
+		.description("tag merged release PRs and create their GitHub releases")
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--dry-run", "print the actions without tagging or editing PRs")
+		.action(async (flags: ReleaseFlags) => {
+			await reconcile(session(), flags);
 		});
 
 	try {

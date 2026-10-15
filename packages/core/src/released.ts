@@ -1,0 +1,171 @@
+import { renderFloatingTags } from "./floating.js";
+import { schemeRegistry } from "./schemes.js";
+import { matchUnitTags } from "./tags.js";
+import { compare } from "./util.js";
+
+import type { Warning } from "./errors.js";
+import type { Plan, ReleasedUnit } from "./plan.js";
+import type { GitReader, MaybePromise, VersionScheme } from "./plugin.js";
+import type { UnitTag } from "./tags.js";
+import type { Workspace } from "./workspace.js";
+
+const stable = (scheme: VersionScheme<any>, version: string): boolean => {
+	const v: unknown = scheme.parse(version);
+
+	return v !== undefined && !scheme.isPrerelease(v);
+};
+
+/**
+ * Released entries of the stable tags `keep` accepts: oldest release commit
+ * on the first-parent chain first, then plan unit order (topological), then
+ * tag name.
+ */
+const releasedEntries = async (
+	workspace: Workspace,
+	plan: Plan,
+	{
+		git,
+		keep,
+	}: { git: GitReader; keep: (tag: UnitTag) => MaybePromise<boolean> },
+): Promise<ReleasedUnit[]> => {
+	const matched = matchUnitTags(
+		workspace.units,
+		await git.tags(),
+		schemeRegistry(workspace.schemes),
+	);
+	const line = plan.line?.kind ?? "default";
+	const candidates = workspace.units.flatMap((unit) => {
+		const m = matched.get(unit.id);
+		if (!m) {
+			return [];
+		}
+
+		const names = m.tags.map((t) => t.name);
+
+		return m.tags
+			.filter((tag) => stable(m.scheme, tag.version))
+			.map((tag): ReleasedUnit => ({
+				id: unit.id,
+				path: unit.root,
+				version: tag.version,
+				tag: tag.name,
+				floatingTags: renderFloatingTags(unit, tag.version, {
+					tags: names,
+					scheme: m.scheme,
+					formats: workspace.release.floating,
+				}),
+				releaseSha: tag.sha,
+				catchUp: tag.sha !== plan.head,
+				pr: null,
+				line,
+			}));
+	});
+	const kept = await Promise.all(
+		candidates.map(
+			async (r) =>
+				await keep({ name: r.tag, sha: r.releaseSha, version: r.version }),
+		),
+	);
+	const released = candidates.filter((_, i) => kept[i]);
+
+	const shas = [...new Set(released.map((r) => r.releaseSha))];
+	const depths = await Promise.all(
+		shas.map(async (sha) => await git.countFirstParent(null, sha)),
+	);
+	const depth = new Map(shas.map((sha, i) => [sha, depths[i] ?? 0]));
+	const rank = new Map(workspace.graph.order.map((id, i) => [id, i]));
+
+	return released.sort(
+		(a, b) =>
+			(depth.get(a.releaseSha) ?? 0) - (depth.get(b.releaseSha) ?? 0) ||
+			(rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0) ||
+			compare(a.tag, b.tag),
+	);
+};
+
+/**
+ * `plan` with `released`: stable unit tags whose commit is on HEAD's
+ * first-parent chain and not an ancestor of `build.base`. With a null base
+ * only tags at HEAD, warning `W_RELEASED_NO_BASE` when earlier releases on the
+ * chain are left out.
+ */
+export const withReleased = async (
+	workspace: Workspace,
+	plan: Plan,
+	{ git }: { git: GitReader },
+): Promise<Plan> => {
+	const { head } = plan;
+	const { base } = plan.build;
+	const atBase =
+		base === null
+			? new Set<string>()
+			: new Set((await git.tagsMerged(base)).map((t) => t.name));
+	let omitted = 0;
+	const released = await releasedEntries(workspace, plan, {
+		git,
+		keep: async (tag) => {
+			if (
+				atBase.has(tag.name) ||
+				!(await git.isFirstParentAncestor(tag.sha, head))
+			) {
+				return false;
+			}
+
+			if (base === null && tag.sha !== head) {
+				omitted += 1;
+
+				return false;
+			}
+
+			return true;
+		},
+	});
+	const warnings: Warning[] =
+		omitted === 0
+			? []
+			: [
+					{
+						code: "W_RELEASED_NO_BASE",
+						message: `the build base is unknown; released lists only releases at HEAD, not ${String(omitted)} earlier on the first-parent chain`,
+					},
+				];
+
+	return { ...plan, released, warnings: [...plan.warnings, ...warnings] };
+};
+
+/**
+ * Released entries of the named tags, in `plan.released` order; names that
+ * are not stable tags of a released unit are skipped. Callers add the tags a
+ * reconcile created by passing the union of those and `plan.released` tags.
+ */
+export const releasedFromTags = async (
+	workspace: Workspace,
+	plan: Plan,
+	{ git, tags }: { git: GitReader; tags: readonly string[] },
+): Promise<ReleasedUnit[]> => {
+	const names = new Set(tags);
+
+	return await releasedEntries(workspace, plan, {
+		git,
+		keep: (tag) => names.has(tag.name),
+	});
+};
+
+/** Tag of the highest stable version of each released unit with one. */
+export const highestReleases = async (
+	workspace: Workspace,
+	{ git }: { git: GitReader },
+): Promise<Set<string>> => {
+	const matched = matchUnitTags(
+		workspace.units,
+		await git.tags(),
+		schemeRegistry(workspace.schemes),
+	);
+
+	return new Set(
+		[...matched.values()].flatMap(
+			({ scheme, tags }) =>
+				tags.findLast((t) => stable(scheme, t.version))?.name ?? [],
+		),
+	);
+};

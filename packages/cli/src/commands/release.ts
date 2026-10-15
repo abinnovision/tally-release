@@ -1,0 +1,373 @@
+import {
+	computePlan,
+	decodeMarker,
+	highestReleases,
+	planEquals,
+	releasedFromTags,
+	releaseNotes,
+	TallyError,
+} from "@tallyrelease/core";
+
+import { effectSkipped } from "./effects.js";
+import { planOptions } from "./plan.js";
+import { repoRef } from "./pr.js";
+import { LABELS } from "../forge/forge.js";
+
+import type { Forge, ReleasePr, RepoRef } from "../forge/forge.js";
+import type { RepoGit } from "../git/reader.js";
+import type { Session } from "../session.js";
+import type { PlanSetup } from "./plan.js";
+import type {
+	MarkerRelease,
+	Plan,
+	ReleasedUnit,
+	TagRef,
+	Workspace,
+} from "@tallyrelease/core";
+
+const short = (sha: string) => sha.slice(0, 7);
+
+/** release-please release name: `cli-v0.2.0` is `cli: v0.2.0`, `v1.0.0` stays. */
+const releaseName = ({ tag, version }: ReleasedUnit): string =>
+	tag.endsWith(`-v${version}`)
+		? `${tag.slice(0, -(version.length + 2))}: v${version}`
+		: tag;
+
+/**
+ * GitHub release per entry unless one exists (a 422 on create means it does);
+ * latest only for the unit's highest stable tag on a default line. Returns the
+ * tags of the missing releases, created unless `dryRun`.
+ */
+const createReleases = async (
+	session: Session,
+	{
+		forge,
+		repo,
+		mergeSha,
+		workspace,
+		dryRun,
+	}: {
+		forge: Forge;
+		repo: RepoRef;
+		mergeSha: string;
+		workspace: Workspace;
+		dryRun: boolean | undefined;
+	},
+	{ released, git }: { released: readonly ReleasedUnit[]; git: RepoGit },
+): Promise<string[]> => {
+	const highest = await highestReleases(workspace, { git });
+	const created: string[] = [];
+	/* eslint-disable no-await-in-loop -- sequential, avoids secondary rate limits */
+	for (const r of released) {
+		if ((await forge.releaseByTag(repo, r.tag)) !== undefined) {
+			continue;
+		}
+
+		created.push(r.tag);
+		if (dryRun) {
+			continue;
+		}
+
+		try {
+			await forge.createRelease(repo, {
+				tag: r.tag,
+				name: releaseName(r),
+				body:
+					releaseNotes(workspace, r.id, (path) =>
+						session.readAt(mergeSha, path),
+					) ?? "",
+				makeLatest: r.line !== "maintenance" && highest.has(r.tag),
+			});
+		} catch (error) {
+			if ((error as { status?: unknown } | null)?.status !== 422) {
+				throw error;
+			}
+		}
+	}
+	/* eslint-enable no-await-in-loop */
+
+	return created;
+};
+
+/** `git` with `local` tags on top; dry runs tag here instead of the repository. */
+const withTags = (
+	git: RepoGit,
+	local: ReadonlyMap<string, string>,
+): RepoGit => {
+	const merge = (tags: readonly TagRef[], extra: TagRef[]) =>
+		[...tags.filter((t) => !local.has(t.name)), ...extra].sort((a, b) =>
+			a.name < b.name ? -1 : 1,
+		);
+	const refs = () => [...local].map(([name, sha]) => ({ name, sha }));
+
+	return {
+		...git,
+		tags: async () => merge(await git.tags(), refs()),
+		tagsMerged: async (ref) => {
+			const head = (await git.resolve(ref)) ?? ref;
+			const merged = await Promise.all(
+				refs().map(async (t) =>
+					(await git.isAncestor(t.sha, head)) ? [t] : [],
+				),
+			);
+
+			return merge(await git.tagsMerged(ref), merged.flat());
+		},
+		resolve: async (ref) => local.get(ref) ?? (await git.resolve(ref)),
+	};
+};
+
+/**
+ * Workspace and plan at the first parent of `mergeSha`; `plan` is undefined
+ * when `releases` are given and do not equal it.
+ */
+const planAtParent = async (
+	session: Session,
+	{
+		git,
+		opts,
+		mergeSha,
+		releases,
+	}: {
+		git: RepoGit;
+		opts: PlanSetup["opts"];
+		mergeSha: string;
+		releases: readonly MarkerRelease[] | undefined;
+	},
+): Promise<{
+	parent: string;
+	plan: { workspace: Workspace; plan: Plan } | undefined;
+}> => {
+	const parent = await git.resolve(`${mergeSha}^1`);
+	if (parent === undefined) {
+		return { parent: mergeSha, plan: undefined };
+	}
+
+	return {
+		parent,
+		plan: await session.workspaceAt(parent, async (workspace, fs) => {
+			const plan = await computePlan(workspace, git, {
+				...opts,
+				head: parent,
+				base: parent,
+				fs,
+				all: true,
+			});
+
+			return releases === undefined || planEquals(releases, plan, workspace)
+				? { workspace, plan }
+				: undefined;
+		}),
+	};
+};
+
+export interface ReleaseFlags {
+	branch?: string;
+	dryRun?: boolean;
+}
+
+/** A merged release PR tagged by `reconcile`, with its version tags. */
+export interface Reconciled {
+	number: number;
+	tags: string[];
+}
+
+/**
+ * Tags merged release PRs labelled `tallyrelease: pending` on the branch,
+ * oldest merge first: a PR whose marker matches its head and the plan at the
+ * first parent of its merge gets its version and floating tags at the merge
+ * (one atomic push), a GitHub release per unit and the `released` label; any
+ * other PR is labelled `stale` with a comment. Merges that are not in HEAD
+ * stay pending. Returns the tagged PRs, including those whose tags existed.
+ */
+export const reconcile = async (
+	session: Session,
+	flags: ReleaseFlags,
+): Promise<Reconciled[]> => {
+	if (effectSkipped(session, "release")) {
+		return [];
+	}
+
+	// Reconcile needs no build base; HEAD as base skips the forge lookup.
+	const setup = await planOptions(session, {
+		...(flags.branch !== undefined && { branch: flags.branch }),
+		base: "HEAD",
+	});
+	const { opts } = setup;
+	const atHead = await session.planAt(null, opts);
+	if (effectSkipped(session, "release", atHead)) {
+		return [];
+	}
+
+	const { forge, gitWriter } = session;
+	const dryTags = new Map<string, string>();
+	const git = flags.dryRun ? withTags(session.git, dryTags) : session.git;
+	const tag = async (name: string, sha: string, force = false) => {
+		if (!flags.dryRun) {
+			await gitWriter.tag(name, sha, { force });
+
+			return;
+		}
+
+		const current = await git.resolve(name);
+		if (current !== undefined && current !== sha && !force) {
+			throw new TallyError(
+				"E_TAG_EXISTS",
+				`tag "${name}" exists at ${current}, not at ${sha}`,
+				{ tag: name, sha: current, expected: sha },
+			);
+		}
+
+		dryTags.set(name, sha);
+	};
+
+	if (!forge) {
+		throw new TallyError(
+			"E_NO_FORGE",
+			"release needs a forge token; pass --token or set GITHUB_TOKEN",
+		);
+	}
+
+	const repo = await repoRef(session);
+	const merged = await forge.releasePrs(repo, {
+		base: atHead.branch,
+		state: "merged",
+	});
+	const lines: string[] = [];
+	const reconciled: Reconciled[] = [];
+	const labelled = flags.dryRun ? "would label" : "labelled";
+
+	const stale = async (pr: ReleasePr, reason: string) => {
+		if (!flags.dryRun) {
+			await forge.setLabel(repo, pr.number, {
+				label: LABELS.stale,
+				comment: `tallyrelease did not tag this release PR: ${reason}. Its releases are proposed again in the next release PR.`,
+			});
+		}
+
+		lines.push(`PR #${String(pr.number)}: ${labelled} stale: ${reason}`);
+	};
+
+	/* eslint-disable no-await-in-loop -- each PR is planned after the tags of the earlier ones */
+	for (const pr of merged) {
+		const label = `PR #${String(pr.number)}`;
+		const mergeSha =
+			pr.mergeCommitSha === null
+				? undefined
+				: await git.resolve(pr.mergeCommitSha);
+		if (
+			mergeSha === undefined ||
+			!(await git.isAncestor(mergeSha, opts.head))
+		) {
+			lines.push(
+				`${label}: merge ${short(pr.mergeCommitSha ?? "-")} is not in HEAD; left pending`,
+			);
+			continue;
+		}
+
+		const marker = decodeMarker(pr.body);
+		if (!marker) {
+			await stale(pr, "its body has no valid tallyrelease marker");
+			continue;
+		}
+
+		if (pr.headSha !== marker.releaseCommit) {
+			await stale(
+				pr,
+				`its head ${short(pr.headSha)} is not the release commit ${short(marker.releaseCommit)}`,
+			);
+			continue;
+		}
+
+		const tags = marker.releases.map((r) => r.tag);
+		const current = await Promise.all(
+			tags.map(async (t) => await git.resolve(t)),
+		);
+		// Tags already at the merge: a run after a partial failure; no plan check.
+		const tagged = current.every((sha) => sha === mergeSha);
+		const planned = await planAtParent(session, {
+			git,
+			opts,
+			mergeSha,
+			releases: tagged ? undefined : marker.releases,
+		});
+		if (!planned.plan) {
+			await stale(
+				pr,
+				`its releases differ from the plan at ${short(planned.parent)}, the commit it was merged onto`,
+			);
+			continue;
+		}
+
+		const { workspace, plan } = planned.plan;
+		const verb = (done: string, dry: string) => (flags.dryRun ? dry : done);
+		for (const t of tags) {
+			await tag(t, mergeSha);
+		}
+
+		const released = await releasedFromTags(workspace, plan, {
+			git,
+			tags,
+		});
+		const floating = [...new Set(released.flatMap((r) => r.floatingTags))];
+		const floatingCurrent = await Promise.all(
+			floating.map(async (t) => await git.resolve(t)),
+		);
+		for (const t of floating) {
+			await tag(t, mergeSha, true);
+		}
+
+		if (!tagged || floatingCurrent.some((sha) => sha !== mergeSha)) {
+			lines.push(
+				`${label}: ${verb("tagged", "would tag")} ${tags.join(", ")} at ${short(mergeSha)}`,
+			);
+			if (!flags.dryRun) {
+				await gitWriter.push(
+					[
+						...tags.map((t) => `refs/tags/${t}`),
+						...floating.map((t) => `+refs/tags/${t}`),
+					],
+					{ atomic: true, token: session.token },
+				);
+			}
+
+			if (floating.length > 0) {
+				lines.push(
+					`${label}: ${verb("moved", "would move")} ${floating.join(", ")}`,
+				);
+			}
+		}
+
+		const created = await createReleases(
+			session,
+			{
+				forge,
+				repo,
+				mergeSha,
+				workspace,
+				dryRun: flags.dryRun,
+			},
+			{ released, git },
+		);
+		if (created.length > 0) {
+			lines.push(
+				`${label}: ${verb("created", "would create")} releases ${created.join(", ")}`,
+			);
+		}
+
+		if (!flags.dryRun) {
+			await forge.setLabel(repo, pr.number, { label: LABELS.released });
+		}
+
+		lines.push(`${label}: ${labelled} released`);
+		reconciled.push({ number: pr.number, tags });
+	}
+	/* eslint-enable no-await-in-loop */
+
+	session.warn(setup.warnings);
+	session.stdout.write(
+		lines.length > 0 ? `${lines.join("\n")}\n` : "no merged release PRs\n",
+	);
+
+	return reconciled;
+};

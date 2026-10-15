@@ -1,0 +1,49 @@
+description: >-
+  Stable tags on the first-parent chain in (base, head] are released; a tag
+  at the base and prerelease tags are not. Floating tags render per release.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default }
+  tags:
+    floating: ["{id}-v{major}"]
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: b"
+      files: { packages/b/index.ts: "1" }
+    - id: c2
+      message: "feat: a"
+      files: { packages/a/index.ts: "2" }
+    - id: c3
+      message: "chore(release): a@1.1.0"
+      files: { packages/a/CHANGELOG.md: "1.1.0" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: b-v1.0.1, commit: c1 }
+    - { name: a-v1.1.0-rc.1, commit: c2 }
+    - { name: a-v1.1.0, commit: c3 }
+base: c1
+plan: { released: true }
+expect:
+  plan:
+    released:
+      - id: a
+        path: packages/a
+        version: 1.1.0
+        tag: a-v1.1.0
+        floatingTags: [a-v1]
+        releaseSha: c3
+        catchUp: false
+        pr: null
+        line: default
+    warnings: []

@@ -57,22 +57,6 @@ const prBody = (
 	return `${text}${marker}\n`;
 };
 
-/** `GITHUB_REPOSITORY`, else owner and name from the repository URL. */
-const repoRef = async (session: Session): Promise<RepoRef> => {
-	const [owner, repo] =
-		session.env["GITHUB_REPOSITORY"]?.split("/") ??
-		(await session.repoUrl())?.split("/").slice(-2) ??
-		[];
-	if (!owner || !repo) {
-		throw new TallyError(
-			"E_NO_FORGE",
-			"the forge repository is unknown; set GITHUB_REPOSITORY or an origin remote",
-		);
-	}
-
-	return { owner, repo };
-};
-
 interface PrTarget {
 	forge: Forge;
 	repo: RepoRef;
@@ -130,6 +114,22 @@ const upsertPr = async (
 	}
 
 	return `${dryRun ? "would update" : "updated"} PR #${String(pr.number)} ${p.branch}: ${p.title}`;
+};
+
+/** `GITHUB_REPOSITORY`, else owner and name from the repository URL. */
+export const repoRef = async (session: Session): Promise<RepoRef> => {
+	const [owner, repo] =
+		session.env["GITHUB_REPOSITORY"]?.split("/") ??
+		(await session.repoUrl())?.split("/").slice(-2) ??
+		[];
+	if (!owner || !repo) {
+		throw new TallyError(
+			"E_NO_FORGE",
+			"the forge repository is unknown; set GITHUB_REPOSITORY or an origin remote",
+		);
+	}
+
+	return { owner, repo };
 };
 
 export interface PrFlags {
