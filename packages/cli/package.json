@@ -2,6 +2,11 @@
 	"name": "@tallyrelease/cli",
 	"version": "0.0.0",
 	"description": "Command line interface of tallyrelease",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/abinnovision/tally-release.git",
+		"directory": "packages/cli"
+	},
 	"license": "Apache-2.0",
 	"author": {
 		"name": "abi group GmbH",
@@ -66,6 +71,14 @@
 	},
 	"publishConfig": {
 		"access": "public",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"import": "./dist/index.js",
+				"default": "./dist/index.js"
+			},
+			"./affected.schema.json": "./dist/affected.schema.json"
+		},
 		"npm": true
 	}
 }

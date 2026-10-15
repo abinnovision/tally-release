@@ -2,6 +2,11 @@
 	"name": "@tallyrelease/core",
 	"version": "0.0.0",
 	"description": "Pure planning core of tallyrelease",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/abinnovision/tally-release.git",
+		"directory": "packages/core"
+	},
 	"license": "Apache-2.0",
 	"author": {
 		"name": "abi group GmbH",
@@ -74,6 +79,18 @@
 	},
 	"publishConfig": {
 		"access": "public",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"import": "./dist/index.js",
+				"default": "./dist/index.js"
+			},
+			"./testing": {
+				"types": "./dist/testing.d.ts",
+				"import": "./dist/testing.js",
+				"default": "./dist/testing.js"
+			}
+		},
 		"npm": true
 	}
 }
