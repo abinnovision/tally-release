@@ -1,0 +1,13 @@
+description: An overlay root with a ".." segment is rejected.
+config:
+  plugins: {}
+  units:
+    packages/../outside: { id: out }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1" }
+base: null
+error:
+  code: E_ROOT_INVALID
+  details: { root: packages/../outside }

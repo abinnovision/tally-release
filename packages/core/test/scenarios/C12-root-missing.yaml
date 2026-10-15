@@ -1,0 +1,13 @@
+description: A unit root that does not exist fails.
+config:
+  plugins: {}
+  units:
+    missing/dir: { id: gone }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "1" }
+base: null
+error:
+  code: E_ROOT_MISSING
+  details: { id: gone, root: missing/dir }

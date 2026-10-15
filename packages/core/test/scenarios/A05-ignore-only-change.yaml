@@ -1,0 +1,20 @@
+description: Ignored files affect nothing and are not reported.
+config:
+  plugins: { stub: {} }
+  ignore: ["**/*.md"]
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", packages/a/README.md: "1" }
+    - id: c1
+      files: { packages/a/README.md: "2", docs/guide.md: "1" }
+base: c0
+expect:
+  affected:
+    build: { all: false, globalInputs: [] }
+    units: []
+    unattributed: []

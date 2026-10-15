@@ -1,0 +1,23 @@
+description: A rename counts for the old and the new path.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "1"
+        packages/a/util.ts: "u"
+        packages/b/index.ts: "1"
+        packages/c/index.ts: "1"
+    - id: c1
+      files: { packages/a/util.ts: null, packages/b/util.ts: "u" }
+base: c0
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct }
+      - { id: b, reason: direct }

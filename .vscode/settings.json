@@ -1,0 +1,10 @@
+{
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"js/ts.tsdk.promptToUseWorkspaceVersion": false,
+	"eslint.workingDirectories": [
+		{
+			"pattern": "./packages/*/"
+		}
+	],
+	"eslint.useFlatConfig": true
+}

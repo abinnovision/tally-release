@@ -1,0 +1,217 @@
+import { TallyError } from "@tallyrelease/core";
+
+import type { GithubContext } from "./github-env.js";
+import type { Forge } from "../forge/forge.js";
+import type { RepoGit } from "../git/reader.js";
+import type { BaseSource, Warning } from "@tallyrelease/core";
+
+const ZERO_SHA = /^0+$/;
+
+const str = (value: unknown): string | undefined =>
+	typeof value === "string" && value !== "" ? value : undefined;
+
+const field = (value: unknown, key: string): unknown =>
+	typeof value === "object" && value !== null
+		? (value as Record<string, unknown>)[key]
+		: undefined;
+
+const noForge: Warning = {
+	code: "W_NO_FORGE",
+	message: "no token for the forge; the last successful run is unknown",
+};
+
+const noWorkflowContext: Warning = {
+	code: "W_NO_WORKFLOW_CONTEXT",
+	message:
+		"GITHUB_REPOSITORY, GITHUB_WORKFLOW_REF or GITHUB_REF_NAME is missing; the last successful run is unknown",
+};
+
+const forgeError = (error: unknown): Warning => {
+	const status = (error as { status?: unknown } | null)?.status;
+	const reason = error instanceof Error ? error.message : String(error);
+
+	return {
+		code: "W_FORGE_ERROR",
+		message: `forge request failed${typeof status === "number" ? ` (${String(status)})` : ""}: ${reason}; the last successful run is unknown`,
+	};
+};
+
+const noLastSuccess: Warning = {
+	code: "W_NO_LAST_SUCCESS",
+	message: "no successful push run of this workflow on this branch",
+};
+
+export interface BuildBase {
+	base: string | null;
+	source: BaseSource;
+	warnings: Warning[];
+}
+
+export interface BuildBaseInput {
+	git: RepoGit;
+	/** Resolved HEAD sha. */
+	head: string;
+	/** `--base`. */
+	cliBase?: string | undefined;
+	github?: GithubContext | undefined;
+	/** Present only when a token is available. */
+	forge?: Forge | undefined;
+}
+
+/** Resolves the build base from `--base`, the CI event, then the forge. */
+export const resolveBuildBase = async (
+	input: BuildBaseInput,
+): Promise<BuildBase> => {
+	const { git, head, github, forge } = input;
+
+	// A named sha missing from a shallow clone must not silently become "everything".
+	const local = async (ref: string, what: string) => {
+		const sha = await git.resolve(ref);
+		if (sha === undefined && (await git.isShallow())) {
+			throw new TallyError(
+				"E_SHALLOW_BASE",
+				`${what} "${ref}" is missing in this shallow clone; fetch with fetch-depth: 0`,
+				{ ref },
+			);
+		}
+
+		return sha;
+	};
+
+	const required = async (ref: string | undefined, what: string) => {
+		const sha = ref === undefined ? undefined : await local(ref, what);
+		if (sha === undefined) {
+			throw new TallyError(
+				"E_BASE_UNRESOLVED",
+				`${what} "${ref ?? ""}" does not resolve to a commit`,
+				{ ref },
+			);
+		}
+
+		return sha;
+	};
+
+	// A named sha that is not an ancestor may only be cut off by a shallow clone.
+	const shallowBase = async (ref: string, what: string) => {
+		if (await git.isShallow()) {
+			throw new TallyError(
+				"E_SHALLOW_BASE",
+				`${what} "${ref}" has no history in common with HEAD in this shallow clone; fetch with fetch-depth: 0`,
+				{ ref },
+			);
+		}
+	};
+
+	/** The newest usable successful run, or the warning why there is none. */
+	const lastSuccess = async (from: Forge): Promise<string | Warning> => {
+		if (!github?.repository || !github.workflow || !github.refName) {
+			return noWorkflowContext;
+		}
+
+		let shas: string[];
+		try {
+			shas = await from.lastSuccessfulPushRuns({
+				...github.repository,
+				workflow: github.workflow,
+				branch: github.refName,
+			});
+		} catch (error) {
+			return forgeError(error);
+		}
+
+		for (const candidate of shas) {
+			// eslint-disable-next-line no-await-in-loop -- newest usable run wins
+			const sha = await local(candidate, "last successful run");
+			// eslint-disable-next-line no-await-in-loop -- newest usable run wins
+			if (sha !== undefined && (await git.isAncestor(sha, head))) {
+				return sha;
+			}
+		}
+
+		return noLastSuccess;
+	};
+
+	const result = (
+		base: string | null,
+		source: BaseSource,
+		...warnings: Warning[]
+	): BuildBase => ({ base, source, warnings });
+
+	const fromLastSuccess = async (): Promise<BuildBase> => {
+		if (!forge) {
+			return result(null, "none", noForge);
+		}
+
+		const last = await lastSuccess(forge);
+
+		return typeof last === "string"
+			? result(last, "forge-last-success")
+			: result(null, "none", last);
+	};
+
+	if (input.cliBase !== undefined) {
+		return result(await required(input.cliBase, "--base"), "cli");
+	}
+
+	switch (github?.eventName) {
+		case "pull_request": {
+			const target = await required(
+				str(field(field(github.payload()["pull_request"], "base"), "sha")),
+				"pull_request.base.sha",
+			);
+			const base = await git.mergeBase(head, target);
+			if (base === undefined) {
+				await shallowBase(target, "pull_request.base.sha");
+				throw new TallyError(
+					"E_BASE_UNRESOLVED",
+					`no merge base of HEAD and "${target}"`,
+					{ ref: target },
+				);
+			}
+
+			return result(base, "pr-merge-base");
+		}
+
+		case "merge_group":
+			return result(
+				await required(
+					str(field(github.payload()["merge_group"], "base_sha")),
+					"merge_group.base_sha",
+				),
+				"merge-group",
+			);
+		case "push": {
+			const ref = str(github.payload()["before"]);
+			const before =
+				ref === undefined || ZERO_SHA.test(ref)
+					? undefined
+					: await local(ref, "push before");
+			if (before !== undefined && (await git.isAncestor(before, head))) {
+				if (!forge) {
+					return result(before, "push-before", noForge);
+				}
+
+				const last = await lastSuccess(forge);
+				if (typeof last !== "string") {
+					return result(before, "push-before", last);
+				}
+
+				return (await git.isAncestor(last, before))
+					? result(last, "forge-last-success")
+					: result(before, "push-before");
+			}
+
+			if (before !== undefined) {
+				await shallowBase(before, "push before");
+			}
+
+			return await fromLastSuccess();
+		}
+
+		case "workflow_dispatch":
+		case "schedule":
+			return await fromLastSuccess();
+		default:
+			return result(null, "none");
+	}
+};

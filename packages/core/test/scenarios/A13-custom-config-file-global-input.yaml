@@ -1,0 +1,21 @@
+description: A custom config file path replaces tallyrelease.yaml as global input.
+configFile: conf/release.yaml
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "1"
+        conf/release.yaml: "1"
+        tallyrelease.yaml: "1"
+    - id: c1
+      files: { conf/release.yaml: "2", tallyrelease.yaml: "2" }
+base: c0
+expect:
+  affected:
+    build: { all: true, globalInputs: [conf/release.yaml] }
+    units:
+      - { id: a, reason: global }

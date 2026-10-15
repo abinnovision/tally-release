@@ -1,0 +1,11 @@
+{
+	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"changelog-path": "CHANGELOG.md",
+	"release-type": "node",
+	"bump-minor-pre-major": true,
+	"plugins": ["node-workspace"],
+	"packages": {
+		"packages/core": {},
+		"packages/cli": {}
+	}
+}

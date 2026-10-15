@@ -1,0 +1,14 @@
+description: Errors thrown by a hook are wrapped with plugin and hook name.
+plugins:
+  - name: stub
+    throws: edges
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1" }
+base: null
+error:
+  code: E_PLUGIN_HOOK
+  details: { plugin: stub, hook: edges }

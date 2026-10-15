@@ -1,0 +1,57 @@
+{
+	"$schema": "https://json.schemastore.org/package.json",
+	"name": "@tallyrelease/root",
+	"version": "0.0.0",
+	"private": true,
+	"license": "Apache-2.0",
+	"author": {
+		"name": "abi group GmbH",
+		"email": "info@abigroup.io",
+		"url": "https://abigroup.io"
+	},
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"build": "yarn turbo run build",
+		"check": "yarn format:check & yarn sort:check & turbo run check",
+		"clean": "rimraf -g -I 'coverage/' 'packages/*/{coverage,dist,.turbo}' 'out/'",
+		"fix": "yarn format:fix & yarn sort:fix & turbo run fix",
+		"format:check": "prettier --check '{.github/**/*,*,docs/**/*}.{json{,5},md,y{,a}ml,gql}'",
+		"format:fix": "prettier --write '{.github/**/*,*,docs/**/*}.{json{,5},md,y{,a}ml,gql}'",
+		"postinstall": "husky",
+		"sort:check": "sort-package-json 'packages/**!(node_modules)/package.json' 'package.json' --check",
+		"sort:fix": "sort-package-json 'packages/**!(node_modules)/package.json' 'package.json'",
+		"test-integration": "turbo run test-integration",
+		"test-unit": "vitest --run --coverage",
+		"test-unit:watch": "vitest"
+	},
+	"commitlint": {
+		"extends": [
+			"@abinnovision/commitlint-config"
+		]
+	},
+	"lint-staged": {
+		"**/package.json": "sort-package-json",
+		"{.github/**/*,*,docs/**/*}.{json{,5},md,y{,a}ml,gql}": "prettier --write"
+	},
+	"prettier": "@abinnovision/prettier-config",
+	"devDependencies": {
+		"@abinnovision/commitlint-config": "^2.3.1",
+		"@abinnovision/prettier-config": "^2.2.0",
+		"@commitlint/cli": "^21.2.3",
+		"@vitest/coverage-v8": "^5.0.3",
+		"husky": "^9.1.7",
+		"lint-staged": "^17.6.0",
+		"prettier": "^3.9.9",
+		"rimraf": "^6.1.3",
+		"sort-package-json": "^4.0.0",
+		"turbo": "2.11.7",
+		"vite": "^8.3.4",
+		"vitest": "^5.0.3"
+	},
+	"packageManager": "yarn@4.18.0",
+	"engines": {
+		"node": ">=24"
+	}
+}

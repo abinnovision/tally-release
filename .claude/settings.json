@@ -1,0 +1,18 @@
+{
+	"permissions": {
+		"allow": [
+			"WebSearch",
+			"Bash(yarn:*)",
+			"Bash(make:*)",
+			"Skill(js-standard:*)"
+		]
+	},
+	"extraKnownMarketplaces": {
+		"abi-group-cc-marketplace": {
+			"source": {
+				"source": "github",
+				"repo": "abinnovision/cc-marketplace"
+			}
+		}
+	}
+}

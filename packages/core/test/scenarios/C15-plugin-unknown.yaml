@@ -1,0 +1,11 @@
+description: A config plugin without an implementation fails.
+config:
+  plugins: { ghost: {} }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "1" }
+base: null
+error:
+  code: E_PLUGIN_UNKNOWN
+  details: { plugin: ghost }

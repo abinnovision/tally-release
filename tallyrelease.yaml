@@ -1,0 +1,6 @@
+plugins:
+  node: {}
+units:
+  packages/core: { id: core }
+  packages/cli: { id: cli }
+  packages/tsconfig: { version: none }

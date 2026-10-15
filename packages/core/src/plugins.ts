@@ -1,0 +1,90 @@
+import { TallyError } from "./errors.js";
+import { assertPlugin } from "./plugin.js";
+
+import type { TallyConfig } from "./config.js";
+import type { Warning } from "./errors.js";
+import type { Ctx, MaybePromise, Plugin, ReadonlyFs } from "./plugin.js";
+
+/** An enabled plugin with its validated options. */
+export interface ActivePlugin {
+	readonly plugin: Plugin;
+	readonly ctx: Ctx;
+	/** False when `plugins.<name>.globalInputs: false`. */
+	readonly globalInputs: boolean;
+}
+
+export interface PluginEnv {
+	config: TallyConfig;
+	/** Available plugins; `config.plugins` selects and orders them. */
+	plugins: readonly Plugin[];
+	fs: ReadonlyFs;
+	repo: { name: string };
+	debug?: (message: string) => void;
+}
+
+/** Resolves enabled plugins in config order and validates their options. */
+export const activatePlugins = async (
+	env: PluginEnv,
+	warnings: Warning[],
+): Promise<ActivePlugin[]> => {
+	const active: ActivePlugin[] = [];
+	for (const [name, raw] of Object.entries(env.config.plugins)) {
+		const plugin = env.plugins.find((p) => p.name === name);
+		if (!plugin) {
+			throw new TallyError("E_PLUGIN_UNKNOWN", `unknown plugin "${name}"`, {
+				plugin: name,
+			});
+		}
+
+		assertPlugin(plugin);
+
+		const { globalInputs, ...rest } = raw ?? {};
+		let options: unknown = rest;
+		if (plugin.options) {
+			// eslint-disable-next-line no-await-in-loop -- plugins load sequentially in config order
+			const result = await plugin.options["~standard"].validate(rest);
+			if (result.issues) {
+				throw new TallyError(
+					"E_PLUGIN_OPTIONS",
+					`invalid options for plugin "${name}": ${result.issues.map((i) => i.message).join("; ")}`,
+					{ plugin: name, issues: result.issues },
+				);
+			}
+
+			options = result.value;
+		}
+
+		const ctx: Ctx = Object.freeze({
+			options,
+			repo: Object.freeze({ name: env.repo.name }),
+			fs: env.fs,
+			log: Object.freeze({
+				warn: (message: string) => {
+					warnings.push({ code: "W_PLUGIN", message, plugin: name });
+				},
+				debug: (message: string) => env.debug?.(`${name}: ${message}`),
+			}),
+		});
+		active.push({ plugin, ctx, globalInputs: globalInputs !== false });
+	}
+
+	return active;
+};
+
+/** Awaits a plugin hook, wrapping thrown errors as `E_PLUGIN_HOOK`. */
+export const runHook = async <T>(
+	plugin: string,
+	hook: string,
+	call: () => MaybePromise<T>,
+): Promise<T> => {
+	try {
+		return await call();
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		throw new TallyError(
+			"E_PLUGIN_HOOK",
+			`plugin "${plugin}" failed in ${hook}: ${reason}`,
+			{ plugin, hook, error },
+		);
+	}
+};

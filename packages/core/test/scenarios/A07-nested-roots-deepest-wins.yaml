@@ -1,0 +1,28 @@
+description: A file belongs to the deepest unit root containing it.
+plugins:
+  - name: stub
+    units:
+      - { id: root, root: . }
+      - { id: a, root: packages/a }
+      - { id: sub, root: packages/a/sub }
+git:
+  commits:
+    - id: c0
+      files:
+        README.md: "1"
+        packages/a/index.ts: "1"
+        packages/a/sub/index.ts: "1"
+    - id: c1
+      files: { packages/a/index.ts: "2", packages/a/sub/index.ts: "2" }
+base: c0
+expect:
+  units:
+    - { id: a, include: [packages/a/**], exclude: [packages/a/sub/**] }
+    - id: root
+      include: ["**"]
+      exclude: [packages/a/**, packages/a/sub/**]
+    - { id: sub, include: [packages/a/sub/**], exclude: [] }
+  affected:
+    units:
+      - { id: a, reason: direct }
+      - { id: sub, reason: direct }

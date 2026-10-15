@@ -1,0 +1,20 @@
+description: Two units with the same id fail and name both owners.
+plugins:
+  - name: one
+    units:
+      - { id: a, root: packages/a }
+  - name: two
+    units:
+      - { id: a, root: libs/a }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", libs/a/index.ts: "1" }
+base: null
+error:
+  code: E_DUPLICATE_UNIT
+  details:
+    id: a
+    owners:
+      - { plugin: one, root: packages/a }
+      - { plugin: two, root: libs/a }

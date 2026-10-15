@@ -1,0 +1,23 @@
+description: A change inside one unit marks only that unit.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", packages/b/index.ts: "1" }
+    - id: c1
+      files: { packages/a/index.ts: "2" }
+base: c0
+expect:
+  affected:
+    schema: 1
+    repo: demo
+    head: c1
+    build: { base: c0, baseSource: cli, all: false, globalInputs: [] }
+    units:
+      - { id: a, path: packages/a, plugin: stub, reason: direct, via: [] }
+    unattributed: []
+    warnings: []

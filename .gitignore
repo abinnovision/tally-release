@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+.turbo/
+
+# Generated files
+gen/
+*.generated.ts
+*.gen.ts
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# Logs
+*.log
+
+# Secrets
+secrets/
+
+# Local (personal scripts, notes, scratch files)
+.local/
+.claude/settings.local.json
+.conductor/settings.local.toml
+
+.omc/
+.omo/
+.slim/
+.codegraph/

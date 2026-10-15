@@ -1,0 +1,17 @@
+description: The config file is a core global input.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", tallyrelease.yaml: "1" }
+    - id: c1
+      files: { tallyrelease.yaml: "2" }
+base: c0
+expect:
+  affected:
+    build: { all: true, globalInputs: [tallyrelease.yaml] }
+    units:
+      - { id: a, reason: global }

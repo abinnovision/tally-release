@@ -1,0 +1,51 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"ui": "stream",
+	"noUpdateNotifier": true,
+	"tasks": {
+		"fix": {
+			"dependsOn": ["format:fix", "lint:fix", "sort:fix"]
+		},
+		"check": {
+			"dependsOn": [
+				"format:check",
+				"lint:check",
+				"sort:check",
+				"typecheck",
+				"check:purity"
+			]
+		},
+		"format:fix": {},
+		"format:check": {},
+		"lint:fix": {
+			"dependsOn": ["^build"]
+		},
+		"lint:check": {
+			"dependsOn": ["^build"]
+		},
+		"sort:fix": {},
+		"sort:check": {},
+		"build": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**/*"],
+			"outputs": ["dist/**/*"]
+		},
+		"typecheck": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**/*", "test/**/*"]
+		},
+		"test-unit": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**/*", "test/**/*"]
+		},
+		"test-integration": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**/*", "test/**/*"]
+		},
+		"check:purity": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**/*", "scripts/**/*"]
+		}
+	},
+	"agentGuidance": false
+}
