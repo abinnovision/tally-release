@@ -177,6 +177,25 @@ describe("plan", () => {
 		}
 	});
 
+	it("writes a markdown summary to $GITHUB_STEP_SUMMARY or stdout", async () => {
+		const file = join(tmpDir("summary"), "summary.md");
+		const stepped = await run(["plan", "--base", "p2", "--summary"], {
+			env: { GITHUB_STEP_SUMMARY: file },
+		});
+		expect(stepped.stdout).toMatch(/^branch {2}main/);
+		const printed = await run(["plan", "--base", "p2", "--summary"]);
+		expect(readFileSync(file, "utf8")).toBe(printed.stdout);
+		expect(printed.stdout).toContain(
+			"| Unit | Kind | From | Bump | Next | Version |",
+		);
+		expect(printed.stdout).toContain(
+			"| ui | prerelease | 1.0.0 | minor | 1.1.0 | 1.1.0-beta.3 |",
+		);
+
+		const usage = await run(["plan", "--json", "--summary"]);
+		expect(usage.code).toBe(2);
+	});
+
 	it("rejects --json with --format", async () => {
 		const result = await run(["plan", "--json", "--format", "json"]);
 		expect(result.code).toBe(2);

@@ -2,8 +2,9 @@ import { TallyError } from "@tallyrelease/core";
 import { appendFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { baseLine, resolveBuildBase } from "../ci/base.js";
+import { baseLabel, baseLine, resolveBuildBase } from "../ci/base.js";
 import { planGithubOutput } from "../ci/outputs.js";
+import { appendStepSummary } from "../ci/summary.js";
 import { alignColumns } from "../output/columns.js";
 import { count } from "../output/count.js";
 import { painter } from "../output/paint.js";
@@ -74,6 +75,41 @@ const text = (session: Session, doc: Plan, base: BuildBase): string => {
 	return `${lines.join("\n")}\n`;
 };
 
+const markdown = (doc: Plan, base: BuildBase): string => {
+	const lines = [
+		"### tallyrelease plan",
+		"",
+		`Branch ${lineLabel(doc.line, doc.branch)}.`,
+		"",
+		`Base ${base.base?.slice(0, 7) ?? "none"} (${baseLabel(base)}).`,
+		"",
+	];
+	if (doc.units.length === 0) {
+		lines.push("No units planned.");
+	} else {
+		const grouped = doc.units.some((u) => u.group !== null);
+		lines.push(
+			`| Unit |${grouped ? " Group |" : ""} Kind | From | Bump | Next | Version |`,
+			`| :-- |${grouped ? " :-- |" : ""} :-- | :-- | :-- | :-- | :-- |`,
+			...doc.units.map(
+				(u) =>
+					`| ${u.id} |${grouped ? ` ${u.group ?? "-"} |` : ""} ${u.kind} | ${u.from ?? "-"} | ${u.bump ?? "-"} | ${u.next ?? "-"} | ${u.version ?? "-"} |`,
+			),
+		);
+	}
+
+	if (doc.warnings.length > 0) {
+		lines.push(
+			"",
+			"Warnings:",
+			"",
+			...doc.warnings.map((w) => `- ${w.code}: ${w.message}`),
+		);
+	}
+
+	return `${lines.join("\n")}\n`;
+};
+
 export interface PlanFlags {
 	branch?: string;
 	base?: string;
@@ -83,6 +119,7 @@ export interface PlanFlags {
 	json?: boolean;
 	out?: string;
 	githubOutput?: boolean;
+	summary?: boolean;
 }
 
 export interface PlanSetup {
@@ -203,6 +240,15 @@ export const plan = async (
 		appendFileSync(outputPath, planGithubOutput(path));
 	}
 
+	const appended =
+		flags.summary && appendStepSummary(session.env, markdown(doc, base));
+
 	const format = flags.format ?? (flags.json ? "json" : "text");
-	session.stdout.write(format === "json" ? json : text(session, doc, base));
+	session.stdout.write(
+		format === "json"
+			? json
+			: flags.summary && !appended
+				? markdown(doc, base)
+				: text(session, doc, base),
+	);
 };
