@@ -476,6 +476,8 @@ Global flags: `--cwd`, `--config`, `--token` (else `GITHUB_TOKEN`), `--verbose`.
 
 Defaults: units are not released (`release: false`, `version: none`); `tagFormat` = `{id}-v{version}`; a unit at root `.` defaults to `v{version}` (release-please parity for single repos); `propagate: auto`.
 
+The config schema is published as `dist/tallyrelease.schema.json` (export `@tallyrelease/cli/tallyrelease.schema.json`, also on jsDelivr), generated from the zod `configSchema`; an optional top-level `$schema` key is accepted and ignored.
+
 Releasing is an explicit repo decision. `release: true` (per unit) or `defaults.release: true` (all units, with `release: false` opt-outs) opts units in; the plugin's version source applies unless an overlay sets `version: file | tag`. `version: none` is rejected with `E_CONFIG` (hint: `use release: false`).
 
 ```yaml
@@ -718,4 +720,4 @@ Built-in plugins in `packages/cli/src/plugins/**` use the public API only. Lint 
 
 **Consequences.** Core is async; `memoryGit` must model first-parent ancestry. Two integration passes in `abinnovision/actions`, plus a publisher change for `catchUp` entries. Every push run makes one forge call for the base. cli is a large package until split. release-please and tallyrelease run side by side through v0.2.
 
-**Follow-ups.** Split cli when a second consumer appears; Tier 2/3 plugin loading; `dart`/`flutter` with `changelog` hook; `generic`; `fixed` groups; `calver`; `changesets`; `go` with `validate` hook; SEA binary; release-please importer; SchemaStore entry for `tallyrelease.yaml`.
+**Follow-ups.** Split cli when a second consumer appears; Tier 2/3 plugin loading; `dart`/`flutter` with `changelog` hook; `generic`; `fixed` groups; `calver`; `changesets`; `go` with `validate` hook; SEA binary; release-please importer; SchemaStore registration for `tallyrelease.yaml` (the schema is already published).

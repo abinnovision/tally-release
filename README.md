@@ -39,6 +39,17 @@ tallyrelease graph --format mermaid
 { echo '```mermaid'; tallyrelease graph --format mermaid; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 ````
 
+## Editor support
+
+`tallyrelease.yaml` has a JSON schema for completion and validation in editors using the YAML language server. Add one of these modelines as the first line.
+
+```yaml
+# yaml-language-server: $schema=./node_modules/@tallyrelease/cli/dist/tallyrelease.schema.json
+# yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/@tallyrelease/cli@0/dist/tallyrelease.schema.json
+```
+
+Use the `node_modules` path when the cli is installed, since it always matches the installed version. Use the CDN URL when there is no Node setup; `@0` tracks the latest 0.x release, so pin a version for stability.
+
 ## Development
 
 Requires Node 24 and Yarn (via corepack).

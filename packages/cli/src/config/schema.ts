@@ -3,13 +3,39 @@ import { z } from "zod";
 import type { TallyConfig } from "@tallyrelease/core";
 
 const globs = z.array(z.string()).exactOptional();
-const propagate = z.enum(["auto", "patch", "rebuild"]);
+const propagate = z.enum(["auto", "patch", "rebuild"]).meta({
+	description:
+		"Policy for this unit when a dependency is released: patch (at least a patch bump), rebuild (rebuild only) or auto (patch if the edge is pinned, else rebuild).",
+});
+
+const tagFormat = z.string().meta({
+	description:
+		"Tag template. Defaults to {id}-v{version}, or v{version} for the root unit.",
+});
 
 const unitOverlay = z.strictObject({
-	id: z.string().exactOptional(),
-	include: globs,
-	exclude: globs,
-	release: z.boolean().exactOptional(),
+	id: z
+		.string()
+		.meta({
+			description:
+				"Unit id (letters, digits, dot, underscore, dash). Defaults to the discovered id, or the repo name for the root unit.",
+		})
+		.exactOptional(),
+	include: globs.meta({
+		description:
+			"Globs of files owned by the unit. Replaces the default (the unit root).",
+	}),
+	exclude: globs.meta({
+		description:
+			"Globs excluded from the unit, appended to the default (roots of nested units).",
+	}),
+	release: z
+		.boolean()
+		.meta({
+			description:
+				"Whether the unit is versioned and tagged. Default false (build-only).",
+		})
+		.exactOptional(),
 	version: z
 		.enum(["file", "tag"], {
 			error: (issue) =>
@@ -17,35 +43,84 @@ const unitOverlay = z.strictObject({
 					? 'version "none" is not supported, use release: false'
 					: undefined,
 		})
+		.meta({
+			description:
+				"Where a released unit's version lives. file: version file written by the plugin. tag: git tags only. Defaults to the plugin's version source.",
+		})
 		.exactOptional(),
-	scheme: z.string().exactOptional(),
-	tagFormat: z.string().exactOptional(),
+	scheme: z
+		.string()
+		.meta({ description: "Versioning scheme. Defaults to semver." })
+		.exactOptional(),
+	tagFormat: tagFormat.exactOptional(),
 	propagate: propagate.exactOptional(),
 });
 
 /** Schema of `tallyrelease.yaml`. */
 export const configSchema = z.strictObject({
+	$schema: z
+		.string()
+		.meta({ description: "Schema reference for editors, ignored." })
+		.exactOptional(),
 	plugins: z
 		.record(z.string(), z.record(z.string(), z.unknown()).nullable())
+		.meta({
+			description:
+				"Enabled plugins and their options, run in the listed order. Only listed plugins run.",
+		})
 		.default({}),
 	defaults: z
 		.strictObject({
-			release: z.boolean().exactOptional(),
-			tagFormat: z.string().exactOptional(),
+			release: z
+				.boolean()
+				.meta({
+					description:
+						"Release all units unless a unit sets release: false. Default false.",
+				})
+				.exactOptional(),
+			tagFormat: tagFormat.exactOptional(),
 			propagate: propagate.exactOptional(),
 		})
+		.meta({ description: "Defaults applied to every unit." })
 		.exactOptional(),
-	units: z.record(z.string(), unitOverlay).exactOptional(),
+	units: z
+		.record(z.string(), unitOverlay)
+		.meta({
+			description:
+				"Unit overlays keyed by root path. A root without a discovered unit becomes a config-only unit.",
+		})
+		.exactOptional(),
 	deps: z
 		.array(
 			z.strictObject({
-				from: z.string(),
-				to: z.string(),
-				pinned: z.boolean().exactOptional(),
-				reason: z.string().exactOptional(),
+				from: z.string().meta({ description: "Id of the dependency." }),
+				to: z.string().meta({ description: "Id of the dependent unit." }),
+				pinned: z
+					.boolean()
+					.meta({
+						description: "Whether the dependent pins an exact version.",
+					})
+					.exactOptional(),
+				reason: z
+					.string()
+					.meta({ description: "Why the edge exists." })
+					.exactOptional(),
 			}),
 		)
+		.meta({ description: "Extra dependency edges between units." })
 		.exactOptional(),
-	ignore: globs,
-	globalInputs: globs,
+	ignore: globs.meta({
+		description: "Globs of files that never affect any unit, for example docs.",
+	}),
+	globalInputs: globs.meta({
+		description:
+			"Globs of files whose change affects all units, unioned with plugin defaults.",
+	}),
 }) satisfies z.ZodType<TallyConfig>;
+
+/** JSON schema (draft-07) of `tallyrelease.yaml` as published for editors. */
+export const configJsonSchema = () => ({
+	...z.toJSONSchema(configSchema, { target: "draft-7", io: "input" }),
+	$id: "https://cdn.jsdelivr.net/npm/@tallyrelease/cli@0/dist/tallyrelease.schema.json",
+	title: "tallyrelease.yaml",
+});
