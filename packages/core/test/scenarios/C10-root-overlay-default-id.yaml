@@ -1,0 +1,34 @@
+description: >-
+  A root overlay without id creates a unit named after the repo that absorbs
+  otherwise unattributed files, while root package.json stays global.
+config:
+  plugins: { stub: {} }
+  units:
+    .: {}
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+    inputs: [package.json]
+git:
+  commits:
+    - id: c0
+      files: { package.json: "1", README.md: "1", packages/a/index.ts: "1" }
+    - id: c1
+      files: { package.json: "2", README.md: "2" }
+base: c0
+expect:
+  units:
+    - { id: a }
+    - id: demo
+      root: .
+      plugin: config
+      include: ["**"]
+      exclude: [packages/a/**]
+      tagFormat: v{version}
+  affected:
+    build: { all: true, globalInputs: [package.json] }
+    units:
+      - { id: a, reason: global }
+      - { id: demo, path: ., plugin: config, reason: global }
+    unattributed: []

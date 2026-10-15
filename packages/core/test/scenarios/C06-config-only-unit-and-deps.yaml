@@ -1,0 +1,28 @@
+description: An overlay without a discovered unit creates one; config deps add edges.
+config:
+  plugins: { stub: {} }
+  units:
+    infra/tf: { id: tf, version: tag }
+  deps:
+    - { from: a, to: tf }
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", infra/tf/main.tf: "1" }
+    - id: c1
+      files: { packages/a/index.ts: "2" }
+base: c0
+expect:
+  units:
+    - { id: a, plugin: stub }
+    - { id: tf, root: infra/tf, plugin: config, version: tag, meta: {} }
+  edges:
+    - { from: a, to: tf, pinned: false, reasons: [config], sources: [config] }
+  affected:
+    units:
+      - { id: a, reason: direct }
+      - { id: tf, path: infra/tf, plugin: config, reason: dependent, via: [a] }

@@ -1,0 +1,16 @@
+description: Two plugins discovering the same root fail.
+plugins:
+  - name: one
+    units:
+      - { id: a, root: packages/a }
+  - name: two
+    units:
+      - { id: a2, root: ./packages/a/ }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1" }
+base: null
+error:
+  code: E_DUPLICATE_ROOT
+  details: { root: packages/a, plugins: [one, two] }

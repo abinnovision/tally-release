@@ -1,0 +1,32 @@
+description: A diamond lists the bottom unit once, via both affected dependencies.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+      - { id: d, root: packages/d }
+    edges:
+      - { from: a, to: b, reason: dependencies, pinned: false }
+      - { from: a, to: c, reason: dependencies, pinned: false }
+      - { from: b, to: d, reason: dependencies, pinned: false }
+      - { from: c, to: d, reason: dependencies, pinned: false }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "1"
+        packages/b/index.ts: "1"
+        packages/c/index.ts: "1"
+        packages/d/index.ts: "1"
+    - id: c1
+      files: { packages/a/index.ts: "2" }
+base: c0
+expect:
+  order: [a, b, c, d]
+  affected:
+    units:
+      - { id: a, reason: direct, via: [] }
+      - { id: b, reason: dependent, via: [a] }
+      - { id: c, reason: dependent, via: [a] }
+      - { id: d, reason: dependent, via: [b, c] }

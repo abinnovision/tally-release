@@ -1,0 +1,18 @@
+description: Options failing the plugin schema are rejected.
+config:
+  plugins:
+    stub: { mode: fast, bogus: 1 }
+plugins:
+  - name: stub
+    optionKeys: [mode]
+git:
+  commits:
+    - id: c0
+      files: { README.md: "1" }
+base: null
+error:
+  code: E_PLUGIN_OPTIONS
+  details:
+    plugin: stub
+    issues:
+      - { message: 'unknown option "bogus"' }

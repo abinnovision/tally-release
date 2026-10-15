@@ -1,0 +1,19 @@
+description: Without a base every unit is affected and no diff is taken.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+git:
+  commits:
+    - id: c0
+      files:
+        { packages/a/index.ts: "1", packages/b/index.ts: "1", stray.txt: "1" }
+base: null
+expect:
+  affected:
+    build: { base: null, baseSource: none, all: true, globalInputs: [] }
+    units:
+      - { id: a, path: packages/a, plugin: stub, reason: all, via: [] }
+      - { id: b, path: packages/b, plugin: stub, reason: all, via: [] }
+    unattributed: []

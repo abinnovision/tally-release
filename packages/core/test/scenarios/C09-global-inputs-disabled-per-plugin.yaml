@@ -1,0 +1,26 @@
+description: globalInputs false drops only that plugin's default global inputs.
+config:
+  plugins:
+    one: {}
+    two: { globalInputs: false }
+plugins:
+  - name: one
+    units:
+      - { id: web, root: web }
+    inputs: [yarn.lock]
+  - name: two
+    units:
+      - { id: php, root: php }
+    inputs: [php/composer.lock]
+git:
+  commits:
+    - id: c0
+      files: { web/index.ts: "1", php/composer.lock: "1", yarn.lock: "1" }
+    - id: c1
+      files: { php/composer.lock: "2" }
+base: c0
+expect:
+  affected:
+    build: { all: false, globalInputs: [] }
+    units:
+      - { id: php, reason: direct }

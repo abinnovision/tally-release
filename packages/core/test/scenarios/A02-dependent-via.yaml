@@ -1,0 +1,24 @@
+description: A dependent of a changed unit is affected via that unit.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+    edges:
+      - { from: a, to: b, reason: dependencies, pinned: false }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "1"
+        packages/b/index.ts: "1"
+        packages/c/index.ts: "1"
+    - id: c1
+      files: { packages/a/index.ts: "2" }
+base: c0
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct, via: [] }
+      - { id: b, reason: dependent, via: [a] }

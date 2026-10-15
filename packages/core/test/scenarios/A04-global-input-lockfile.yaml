@@ -1,0 +1,24 @@
+description: A changed plugin global input marks every unit affected.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+    inputs: [yarn.lock]
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "1"
+        packages/b/index.ts: "1"
+        yarn.lock: "1"
+    - id: c1
+      files: { packages/a/index.ts: "2", yarn.lock: "2" }
+base: c0
+expect:
+  affected:
+    build: { all: true, globalInputs: [yarn.lock] }
+    units:
+      - { id: a, reason: global, via: [] }
+      - { id: b, reason: global, via: [] }
+    unattributed: []

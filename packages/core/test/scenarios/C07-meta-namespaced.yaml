@@ -1,0 +1,15 @@
+description: Plugin meta is stored under the plugin name.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a, meta: { packageName: "@demo/a" } }
+      - { id: b, root: packages/b }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1", packages/b/index.ts: "1" }
+base: null
+expect:
+  units:
+    - { id: a, meta: { stub: { packageName: "@demo/a" } } }
+    - { id: b, meta: {} }

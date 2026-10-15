@@ -1,0 +1,22 @@
+description: Glob metacharacters in a root match literally in include and exclude.
+config:
+  plugins: {}
+  units:
+    .: { id: root }
+    packages/[legacy]: { id: legacy }
+git:
+  commits:
+    - id: c0
+      files: { "packages/[legacy]/x.ts": "1", packages/l/x.ts: "1" }
+    - id: c1
+      files: { "packages/[legacy]/x.ts": "2", packages/l/x.ts: "2" }
+base: c0
+expect:
+  units:
+    - { id: legacy, include: ["packages/\\[legacy\\]/**"], exclude: [] }
+    - { id: root, include: ["**"], exclude: ["packages/\\[legacy\\]/**"] }
+  affected:
+    units:
+      - { id: legacy, reason: direct }
+      - { id: root, reason: direct }
+    unattributed: []

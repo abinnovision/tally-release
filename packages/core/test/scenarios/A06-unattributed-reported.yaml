@@ -1,0 +1,17 @@
+description: Files outside every unit are reported as unattributed.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1" }
+    - id: c1
+      files: { packages/a/index.ts: "2", scripts/build.sh: "1", .envrc: "1" }
+base: c0
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct }
+    unattributed: [.envrc, scripts/build.sh]

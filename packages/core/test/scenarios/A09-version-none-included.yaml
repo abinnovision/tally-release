@@ -1,0 +1,23 @@
+description: Build-only units take part in the build set.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: apps/a, version: none }
+      - { id: b, root: packages/b }
+    edges:
+      - { from: b, to: a, reason: dependencies, pinned: false }
+git:
+  commits:
+    - id: c0
+      files: { apps/a/main.ts: "1", packages/b/index.ts: "1" }
+    - id: c1
+      files: { packages/b/index.ts: "2" }
+base: c0
+expect:
+  units:
+    - { id: a, version: none }
+    - { id: b, version: tag }
+  affected:
+    units:
+      - { id: a, reason: dependent, via: [b] }
+      - { id: b, reason: direct }
