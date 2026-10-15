@@ -42,6 +42,7 @@ export const affectedDocSchema = z.strictObject({
 			code: z.string(),
 			message: z.string(),
 			plugin: z.string().exactOptional(),
+			unit: z.string().exactOptional(),
 		}),
 	),
 }) satisfies z.ZodType<AffectedDoc>;

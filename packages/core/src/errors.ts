@@ -20,4 +20,6 @@ export interface Warning {
 	code: string;
 	message: string;
 	plugin?: string;
+	/** The unit the warning concerns. */
+	unit?: string;
 }

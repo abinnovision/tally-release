@@ -39,9 +39,11 @@ units:
 
 Global flags: `--cwd <dir>` (repository root), `--config <file>` (default `tallyrelease.yaml`), `--token <token>` (forge token, default `GITHUB_TOKEN`), `--verbose`.
 
-- `tallyrelease check` validates config, plugins, units and graph.
+- `tallyrelease check` validates config, plugins, units, graph and release config; with released units it also checks the repository's tags.
 - `tallyrelease graph [--format text|json|mermaid] [--json]` prints units and edges.
 - `tallyrelease affected [--base <ref>] [--format text|json|tsv] [--json] [--out <file>] [--github-output] [--tag <tag>]` computes the build set. `--out` writes the affected document as JSON, `--github-output` appends outputs to `$GITHUB_OUTPUT`. `--tag` (repeatable) keeps units with any of the given tags.
+- `tallyrelease plan [--branch <name>] [--base <ref>] [--head <ref>] [--all] [--format text|json] [--json] [--out <file>] [--github-output]` computes the release plan without changing anything: kind, base version, bump, next version and prerelease version per unit. `--head` plans another commit with the current config, `--all` also lists released units with a pending release outside the build set. `--github-output` writes `plan`, the path of the written plan (`--out`, else `$RUNNER_TEMP/tallyrelease-plan.json`). The JSON schema is exported as `@tallyrelease/cli/plan.schema.json`.
+- `tallyrelease explain <unit> [--branch <name>] [--base <ref>]` explains a unit: why it is affected, which commits and files bump it (including changes absorbed from unreleased dependencies), propagation and Release-As footers.
 
 Exit codes: `0` ok, `1` error, `2` usage. For scripts use `--format tsv` or `--json`; the text layout may change between versions.
 

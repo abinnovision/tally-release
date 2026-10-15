@@ -1,10 +1,16 @@
 import { memoryFs } from "@tallyrelease/core/testing";
 import { describe, expect, it } from "vitest";
 
+import { memoryRepo } from "./harness/memory-repo.js";
 import { runCli } from "./harness/run-cli.js";
 
-const check = (files: Record<string, string>, ...args: string[]) =>
-	runCli(["check", ...args], { fs: memoryFs(files) });
+import type { DagTag } from "@tallyrelease/core/testing";
+
+const check = (files: Record<string, string>, tags: DagTag[] = []) =>
+	runCli(["check"], {
+		fs: memoryFs(files),
+		git: memoryRepo({ commits: [{ id: "c0" }], tags }).git,
+	});
 
 describe("check", () => {
 	it("reports errors with exit code 1 (G12)", async () => {
@@ -72,6 +78,38 @@ describe("check", () => {
 			"a/x": "",
 		});
 		expect(none.stdout).toBe("ok: 1 unit (0 released), 0 edges\n");
+	});
+
+	it("validates release config and tags (G32)", async () => {
+		const units = "units:\n  a: { release: true }\n  b: { release: true }\n";
+		const files = { "a/x": "", "b/x": "" };
+		const cases: [string, string][] = [
+			["defaults: { tagFormat: 'v{version}' }\n", "E_TAG_FORMAT_OVERLAP"],
+			[
+				"branches:\n  - { name: main, line: default, channel: beta }\n  - { name: next, line: default, channel: beta }\n",
+				"E_CHANNEL_DUPLICATE",
+			],
+		];
+		for (const [config, code] of cases) {
+			// eslint-disable-next-line no-await-in-loop -- sequential cases
+			const result = await check({
+				...files,
+				"tallyrelease.yaml": `${units}${config}`,
+			});
+			expect(result.code).toBe(1);
+			expect(result.stderr).toMatch(new RegExp(`^error\\[${code}\\]: `));
+		}
+
+		const result = await check({ ...files, "tallyrelease.yaml": units }, [
+			{ name: "a-1.0.0", commit: "c0" },
+			{ name: "b-v1.0.0", commit: "c0" },
+		]);
+		expect(result).toEqual({
+			code: 0,
+			stdout: "ok: 2 units (2 released: a, b), 0 edges\n",
+			stderr:
+				'warning[W_NO_MATCHING_TAG]: released unit "a" has no tag matching "a-v{version}", but "a-1.0.0" contains its id\n',
+		});
 	});
 
 	it("reads --config relative to --cwd", async () => {

@@ -4,13 +4,17 @@ import { inspect } from "node:util";
 
 import { affected } from "./commands/affected.js";
 import { check } from "./commands/check.js";
+import { explain } from "./commands/explain.js";
 import { graph } from "./commands/graph.js";
+import { plan } from "./commands/plan.js";
 import { painter } from "./output/paint.js";
 import { createSession } from "./session.js";
 import { version } from "./version.js";
 
 import type { AffectedFlags } from "./commands/affected.js";
+import type { ExplainFlags } from "./commands/explain.js";
 import type { GraphFlags } from "./commands/graph.js";
+import type { PlanFlags } from "./commands/plan.js";
 import type { Deps, GlobalOptions } from "./session.js";
 
 /** Runs the cli; returns the exit code (0 ok, 1 error, 2 usage). */
@@ -81,6 +85,41 @@ export const main = async (
 			}
 
 			await affected(session(), flags);
+		});
+	program
+		.command("plan")
+		.description("compute the release plan (read-only)")
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--base <ref>", "diff against this ref")
+		.option(
+			"--head <ref>",
+			"plan this commit with the current config; pass --branch for its branch rule",
+		)
+		.option("--all", "also list released units outside the build set")
+		.option("--json", "print the plan (same as --format json)")
+		.addOption(
+			new Option("--format <format>", "output format").choices([
+				"text",
+				"json",
+			]),
+		)
+		.option("--out <file>", "write the plan to a file")
+		.option("--github-output", "append outputs to $GITHUB_OUTPUT")
+		.action(async (flags: PlanFlags, cmd: Command) => {
+			if (flags.json && flags.format !== undefined) {
+				cmd.error("--json and --format cannot be combined", { exitCode: 2 });
+			}
+
+			await plan(session(), flags);
+		});
+	program
+		.command("explain")
+		.description("explain why a unit is affected and how it is versioned")
+		.argument("<unit>", "unit id")
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--base <ref>", "diff against this ref")
+		.action(async (unit: string, flags: ExplainFlags) => {
+			await explain(session(), unit, flags);
 		});
 
 	try {

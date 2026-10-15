@@ -2,14 +2,14 @@ import { computeAffected, TallyError } from "@tallyrelease/core";
 import { appendFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { resolveBuildBase } from "../ci/base.js";
+import { baseLabel, resolveBuildBase } from "../ci/base.js";
 import { affectedGithubOutput } from "../ci/outputs.js";
 import { alignColumns } from "../output/columns.js";
 import { count } from "../output/count.js";
 import { painter } from "../output/paint.js";
+import { branchName } from "../session.js";
 import { version } from "../version.js";
 
-import type { BuildBase } from "../ci/base.js";
 import type { Session } from "../session.js";
 import type { AffectedDoc, AffectedReason } from "@tallyrelease/core";
 
@@ -19,25 +19,6 @@ const GROUPS: readonly AffectedReason[] = [
 	"direct",
 	"dependent",
 ];
-
-const baseLabel = (base: BuildBase): string => {
-	switch (base.source) {
-		case "cli":
-			return `--base ${base.ref ?? ""}`;
-		case "push-before":
-			return "push before";
-		case "pr-merge-base":
-			return "merge base with the PR target";
-		case "merge-group":
-			return "merge group base";
-		case "forge-last-success":
-			return "last successful run";
-		case "local-merge-base":
-			return `merge base with ${base.ref ?? ""}`;
-		case "none":
-			return "everything is affected";
-	}
-};
 
 const tsv = (doc: AffectedDoc): string =>
 	[
@@ -91,8 +72,7 @@ export const affected = async (
 	});
 	const computed = await computeAffected(workspace, git, {
 		tool: `tallyrelease@${version}`,
-		branch:
-			github?.headRef ?? github?.refName ?? (await git.branch()) ?? "HEAD",
+		branch: await branchName(session),
 		head,
 		base: base.base,
 		baseSource: base.source,

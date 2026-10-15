@@ -9,6 +9,12 @@ export type {
 } from "./affected.js";
 export type { ParsedCommit } from "./conventional.js";
 export type {
+	ExplainedChange,
+	ExplainOptions,
+	ReleaseAsFooter,
+	UnitExplanation,
+} from "./explain.js";
+export type {
 	GroupPlan,
 	Plan,
 	PlanChange,
@@ -55,9 +61,11 @@ export { CONFIG_FILE } from "./config.js";
 export { conventionalCommits, parseCommit } from "./conventional.js";
 export { discoverUnits } from "./discover.js";
 export { TallyError } from "./errors.js";
+export { explainUnit } from "./explain.js";
 export { buildGraph } from "./graph.js";
 export { definePlugin, defaultUnitId, PLUGIN_API_VERSION } from "./plugin.js";
 export { computePlan } from "./plan.js";
 export { activatePlugins } from "./plugins.js";
 export { semver } from "./semver.js";
+export { validateRelease, validateTags } from "./validate.js";
 export { loadWorkspace } from "./workspace.js";
