@@ -49,7 +49,8 @@
 	"prettier": "@abinnovision/prettier-config",
 	"dependencies": {
 		"@standard-schema/spec": "^1.1.0",
-		"picomatch": "^4.0.7"
+		"picomatch": "^4.0.7",
+		"semver": "^7.8.5"
 	},
 	"devDependencies": {
 		"@abinnovision/eslint-config-base": "^3.4.2",
@@ -57,6 +58,7 @@
 		"@internal/tsconfig": "workspace:*",
 		"@types/node": "^24.19.2",
 		"@types/picomatch": "^4.0.3",
+		"@types/semver": "^7.8.0",
 		"@vitest/coverage-v8": "^5.0.4",
 		"esbuild": "^0.28.2",
 		"eslint": "^10.12.0",

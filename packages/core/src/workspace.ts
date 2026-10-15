@@ -1,14 +1,17 @@
+import { corePlugin } from "./builtin.js";
 import { CONFIG_FILE } from "./config.js";
 import { discoverUnits } from "./discover.js";
 import { buildGraph } from "./graph.js";
 import { activatePlugins, runHook } from "./plugins.js";
+import { collectSchemes } from "./schemes.js";
 import { uniqueSorted } from "./util.js";
 
 import type { TallyConfig } from "./config.js";
 import type { Warning } from "./errors.js";
 import type { Graph, SourcedEdge } from "./graph.js";
-import type { Unit } from "./plugin.js";
+import type { IntentSource, Unit } from "./plugin.js";
 import type { ActivePlugin, PluginEnv } from "./plugins.js";
+import type { SchemeEntry } from "./schemes.js";
 
 const collectEdges = async (
 	active: readonly ActivePlugin[],
@@ -61,6 +64,13 @@ const collectGlobalInputs = async (
 	return uniqueSorted(globs);
 };
 
+/** An intent source with its plugin's validated options; callers build the `Ctx`. */
+export interface IntentEntry {
+	readonly plugin: string;
+	readonly options: unknown;
+	readonly source: IntentSource;
+}
+
 export interface WorkspaceInput extends PluginEnv {
 	/** Repo-relative config file path, a global input; defaults to `CONFIG_FILE`. */
 	configFile?: string;
@@ -76,6 +86,10 @@ export interface Workspace {
 	readonly globalInputs: readonly string[];
 	readonly ignore: readonly string[];
 	readonly warnings: readonly Warning[];
+	/** Registered schemes, core first; clashes are checked on release. */
+	readonly schemes: readonly SchemeEntry[];
+	/** Core sources first, then enabled plugins in config order. */
+	readonly intents: readonly IntentEntry[];
 }
 
 /** Runs plugin hooks sequentially in config order and builds the graph. */
@@ -95,6 +109,17 @@ export const loadWorkspace = async (
 		input.configFile ?? CONFIG_FILE,
 	);
 
+	const intents = [
+		{ plugin: corePlugin, options: {} },
+		...active.map(({ plugin, ctx }) => ({ plugin, options: ctx.options })),
+	].flatMap(({ plugin, options }) =>
+		(plugin.intent ?? []).map((source) => ({
+			plugin: plugin.name,
+			options,
+			source,
+		})),
+	);
+
 	return {
 		repo: input.repo.name,
 		units,
@@ -102,5 +127,7 @@ export const loadWorkspace = async (
 		globalInputs,
 		ignore: input.config.ignore ?? [],
 		warnings: [...warnings, ...graph.warnings],
+		schemes: collectSchemes(active),
+		intents,
 	};
 };
