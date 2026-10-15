@@ -1,4 +1,5 @@
 import { memoryFs } from "@tallyrelease/core/testing";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { main } from "./main.js";
@@ -22,6 +23,14 @@ const run = async (argv: string[], deps: Partial<Deps> = {}) => {
 };
 
 describe("main", () => {
+	it("reads the version from package.json", () => {
+		const pkg = JSON.parse(
+			readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+		) as { version: string };
+
+		expect(version).toBe(pkg.version);
+	});
+
 	it("prints the version", async () => {
 		expect(await run(["--version"])).toEqual({
 			code: 0,
