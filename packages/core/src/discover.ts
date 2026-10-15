@@ -12,6 +12,8 @@ interface Entry {
 	plugin: string;
 	draft: Omit<UnitDraft, "meta">;
 	meta: Record<string, Readonly<Record<string, unknown>>>;
+	/** From the config overlay only. */
+	release?: boolean | undefined;
 }
 
 /** Drops `.` and empty segments; rejects absolute roots and `..` segments. */
@@ -72,11 +74,14 @@ export const discoverUnits = async (
 		}
 	}
 
-	for (const [key, overlay] of Object.entries(env.config.units ?? {})) {
+	for (const [key, { release, ...overlay }] of Object.entries(
+		env.config.units ?? {},
+	)) {
 		const root = normalizeRoot(key);
 		const entry = byRoot.get(root);
 		if (entry) {
 			entry.draft = { ...entry.draft, ...overlay };
+			entry.release = release;
 		} else {
 			byRoot.set(root, {
 				plugin: "config",
@@ -86,6 +91,7 @@ export const discoverUnits = async (
 					root,
 				},
 				meta: {},
+				release,
 			});
 		}
 	}
@@ -130,7 +136,7 @@ export const discoverUnits = async (
 	const { defaults } = env.config;
 
 	return [...byId.values()]
-		.map(({ plugin, draft, meta }): Unit => {
+		.map(({ plugin, draft, meta, release }): Unit => {
 			const { root } = draft;
 			const nested = roots
 				.filter((r) => isInside(r, root))
@@ -146,7 +152,10 @@ export const discoverUnits = async (
 					]),
 				]),
 				exclude: Object.freeze([...nested, ...(draft.exclude ?? [])]),
-				version: draft.version ?? "tag",
+				version:
+					(release ?? defaults?.release ?? false)
+						? (draft.version ?? "tag")
+						: "none",
 				scheme: draft.scheme ?? "semver",
 				tagFormat:
 					draft.tagFormat ??

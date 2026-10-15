@@ -13,7 +13,7 @@ v0.1 is in progress: the `affected` command, with release-please still owning ve
 | `@tallyrelease/core` | Pure planning core and plugin contract. |
 | `@tallyrelease/cli`  | The `tallyrelease` binary.              |
 
-Configuration lives in `tallyrelease.yaml`.
+Configuration lives in `tallyrelease.yaml`. Units are build-only unless opted in with `release: true` (per unit) or `defaults.release: true`; plugins supply the version source (`file` or `tag`).
 
 ## Development
 

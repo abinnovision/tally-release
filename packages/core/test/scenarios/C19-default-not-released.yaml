@@ -1,0 +1,13 @@
+description: A unit without release opt-in is build-only, whatever its source.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a, version: file }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1" }
+base: c0
+expect:
+  units:
+    - { id: a, version: none }

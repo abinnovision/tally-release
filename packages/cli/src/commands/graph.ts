@@ -30,7 +30,7 @@ export const graph = async (
 	}
 
 	for (const u of units) {
-		session.stdout.write(`${u.id}\t${u.path}\t${u.plugin}\n`);
+		session.stdout.write(`${u.id}\t${u.path}\t${u.plugin}\t${u.version}\n`);
 	}
 
 	for (const e of edges) {

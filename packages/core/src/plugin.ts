@@ -74,15 +74,19 @@ export interface RawCommit {
 
 export type Propagate = "auto" | "patch" | "rebuild";
 
-/** `file`: tags and version files; `tag`: tags only; `none`: build-only. */
-export type VersionMode = "file" | "tag" | "none";
+/** Where a released unit's version lives. `file`: tags and version files; `tag`: tags only. */
+export type VersionSource = "file" | "tag";
+
+/** Effective mode; `none` when the unit is not released. */
+export type VersionMode = VersionSource | "none";
 
 export interface UnitDraft {
 	id: string;
 	root: string;
 	include?: string[];
 	exclude?: string[];
-	version?: VersionMode;
+	/** Source if the unit is released; default `tag`. */
+	version?: VersionSource;
 	scheme?: string;
 	tagFormat?: string;
 	propagate?: Propagate;

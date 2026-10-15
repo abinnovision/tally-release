@@ -9,7 +9,15 @@ const unitOverlay = z.strictObject({
 	id: z.string().exactOptional(),
 	include: globs,
 	exclude: globs,
-	version: z.enum(["file", "tag", "none"]).exactOptional(),
+	release: z.boolean().exactOptional(),
+	version: z
+		.enum(["file", "tag"], {
+			error: (issue) =>
+				issue.input === "none"
+					? 'version "none" is not supported, use release: false'
+					: undefined,
+		})
+		.exactOptional(),
 	scheme: z.string().exactOptional(),
 	tagFormat: z.string().exactOptional(),
 	propagate: propagate.exactOptional(),
@@ -22,6 +30,7 @@ export const configSchema = z.strictObject({
 		.default({}),
 	defaults: z
 		.strictObject({
+			release: z.boolean().exactOptional(),
 			tagFormat: z.string().exactOptional(),
 			propagate: propagate.exactOptional(),
 		})

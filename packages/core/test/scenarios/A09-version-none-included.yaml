@@ -1,8 +1,12 @@
-description: Build-only units take part in the build set.
+description: Unreleased units take part in the build set.
+config:
+  plugins: { stub: {} }
+  units:
+    packages/b: { release: true }
 plugins:
   - name: stub
     units:
-      - { id: a, root: apps/a, version: none }
+      - { id: a, root: apps/a, version: file }
       - { id: b, root: packages/b }
     edges:
       - { from: b, to: a, reason: dependencies, pinned: false }

@@ -1,6 +1,5 @@
 plugins:
   node: {}
 units:
-  packages/core: { id: core }
-  packages/cli: { id: cli }
-  packages/tsconfig: { version: none }
+  packages/core: { id: core, release: true }
+  packages/cli: { id: cli, release: true }

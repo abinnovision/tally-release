@@ -1,0 +1,15 @@
+description: A released config-only unit defaults to the tag source.
+config:
+  plugins: {}
+  units:
+    infra/tf: { id: tf, release: true }
+    infra/dns: { id: dns }
+git:
+  commits:
+    - id: c0
+      files: { infra/tf/main.tf: "1", infra/dns/main.tf: "1" }
+base: c0
+expect:
+  units:
+    - { id: dns, plugin: config, version: none }
+    - { id: tf, plugin: config, version: tag }
