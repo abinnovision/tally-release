@@ -1,5 +1,5 @@
 import { CONFIG_FILE, TallyError } from "@tallyrelease/core";
-import { Command, CommanderError } from "commander";
+import { Command, CommanderError, Option } from "commander";
 import { inspect } from "node:util";
 
 import { affected } from "./commands/affected.js";
@@ -9,6 +9,7 @@ import { createSession } from "./session.js";
 import { version } from "./version.js";
 
 import type { AffectedFlags } from "./commands/affected.js";
+import type { GraphFlags } from "./commands/graph.js";
 import type { Deps, GlobalOptions } from "./session.js";
 
 /** Runs the cli; returns the exit code (0 ok, 1 error, 2 usage). */
@@ -39,8 +40,19 @@ export const main = async (
 	program
 		.command("graph")
 		.description("print units and edges")
-		.option("--json", "print JSON")
-		.action(async (flags: { json?: boolean }) => {
+		.option("--json", "print JSON (same as --format json)")
+		.addOption(
+			new Option("--format <format>", "output format").choices([
+				"text",
+				"json",
+				"mermaid",
+			]),
+		)
+		.action(async (flags: GraphFlags, cmd: Command) => {
+			if (flags.json && flags.format !== undefined) {
+				cmd.error("--json and --format cannot be combined", { exitCode: 2 });
+			}
+
 			await graph(session(), flags);
 		});
 	program

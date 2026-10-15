@@ -15,6 +15,13 @@ v0.1 is in progress: the `affected` command, with release-please still owning ve
 
 Configuration lives in `tallyrelease.yaml`. Units are build-only unless opted in with `release: true` (per unit) or `defaults.release: true`; plugins supply the version source (`file` or `tag`).
 
+## Usage
+
+````sh
+tallyrelease graph --format mermaid
+{ echo '```mermaid'; tallyrelease graph --format mermaid; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+````
+
 ## Development
 
 Requires Node 24 and Yarn (via corepack).
