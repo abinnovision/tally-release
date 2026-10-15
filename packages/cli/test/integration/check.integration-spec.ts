@@ -23,7 +23,7 @@ describe("check", () => {
 		const cases: [Record<string, string>, string][] = [
 			[{}, "E_CONFIG_MISSING"],
 			[{ "tallyrelease.yaml": "plugins: [" }, "E_CONFIG"],
-			[{ "tallyrelease.yaml": "plugins: {}\nbranches: []\n" }, "E_CONFIG"],
+			[{ "tallyrelease.yaml": "plugins: {}\nnope: []\n" }, "E_CONFIG"],
 			[{ "tallyrelease.yaml": "plugins: { nope: {} }\n" }, "E_PLUGIN_UNKNOWN"],
 			[
 				{

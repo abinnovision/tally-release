@@ -146,6 +146,7 @@ export interface Unit {
   readonly tagFormat: string;
   readonly propagate: Propagate;
   readonly tags: readonly string[]; // from the config overlay, sorted, unique; default []
+  readonly initialVersion: string | null; // overlay, else defaults.initialVersion; null: scheme.initial()
   readonly meta: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 
@@ -181,7 +182,7 @@ export interface VersionScheme<V> {
   compare(a: V, b: V): number;
   core(v: V): { major: number; minor: number; patch: number }; // limits, preMajor, floating tags
   isPrerelease(v: V): boolean; // excluded from base and line-base selection
-  initial(): V; // used when no base tag and no version file (semver: 1.0.0)
+  initial(): V; // first release without Release-As or initialVersion (semver: 1.0.0)
   bump(v: V, level: BumpLevel): V;
   release(next: V, ctx: PreCtx): V; // stable finalisation (identity for semver)
   prerelease(next: V, ctx: PreCtx & { channel: string }): V;
@@ -260,15 +261,15 @@ Findings folded into the contract: stable versions also need git data (`release(
 
 ### A.6 Hook conflict rules
 
-| Hook           | Called                                                    | Merge rule                                                                                                                                                                                                                                                                                                                                                                               | Conflict result                                                                                                                                 |
-| :------------- | :-------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `discover`     | Every enabled plugin, config key order                    | Concatenate. Core sets `unit.plugin`, stores `meta` at `meta[plugin.name]`. Then config `units.<root>` overlays apply field by field (overlay wins). `release` comes from config only, so a plugin cannot opt a unit in. An overlay at a root with no discovered unit **always creates** a config-only unit (`plugin: "config"`); its `id` defaults to `defaultUnitId(root, repo.name)`. | Same `id` twice: `E_DUPLICATE_UNIT` (names both owners). Same `root` from two plugins: `E_DUPLICATE_ROOT`.                                      |
-| `edges`        | Every enabled plugin, plus config `deps`                  | Union, dedupe by `(from,to)`: `pinned = OR`, `reasons` and `sources` unioned and sorted.                                                                                                                                                                                                                                                                                                 | Unknown unit id: `E_EDGE_UNKNOWN_UNIT`. Self edge: `E_EDGE_SELF`. Cycles allowed (`W_CYCLE` with path); closure and propagation are cycle-safe. |
-| `inputs`       | Every enabled plugin                                      | Union of plugin `global`, core `tallyrelease.yaml`, config `globalInputs`. `plugins.<name>.globalInputs: false` disables that plugin's defaults; core strips this key before validating plugin `options`.                                                                                                                                                                                | None (union).                                                                                                                                   |
-| `versionFiles` | Owning plugin only, per owned unit                        | Config overlays may not add files in v1.                                                                                                                                                                                                                                                                                                                                                 | A path claimed by two units: `E_VERSION_FILE_CLAIM`.                                                                                            |
-| `schemes`      | Registry built at load                                    | Name -> scheme. `semver` is reserved by core.                                                                                                                                                                                                                                                                                                                                            | Duplicate name: `E_SCHEME_CLASH`. Unknown scheme: `E_SCHEME_UNKNOWN`. Group members with different schemes: `E_GROUP_SCHEME`.                   |
-| `intent`       | All sources of enabled plugins, per distinct commit range | Concatenate Changes. Per unit: bump = max. Commit-derived Changes deduped by `sha,type,breaking`, plus explicit `units`.                                                                                                                                                                                                                                                                 | Two different `releaseAs` for one unit: `E_RELEASE_AS_CONFLICT`.                                                                                |
-| `options`      | At load                                                   | Validated against `plugins.<name>` minus core-owned keys (`globalInputs`).                                                                                                                                                                                                                                                                                                               | `E_PLUGIN_OPTIONS` with schema issues.                                                                                                          |
+| Hook           | Called                                                    | Merge rule                                                                                                                                                                                                                                                                                                                                                                               | Conflict result                                                                                                                                                                                                             |
+| :------------- | :-------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `discover`     | Every enabled plugin, config key order                    | Concatenate. Core sets `unit.plugin`, stores `meta` at `meta[plugin.name]`. Then config `units.<root>` overlays apply field by field (overlay wins). `release` comes from config only, so a plugin cannot opt a unit in. An overlay at a root with no discovered unit **always creates** a config-only unit (`plugin: "config"`); its `id` defaults to `defaultUnitId(root, repo.name)`. | Same `id` twice: `E_DUPLICATE_UNIT` (names both owners). Same `root` from two plugins: `E_DUPLICATE_ROOT`.                                                                                                                  |
+| `edges`        | Every enabled plugin, plus config `deps`                  | Union, dedupe by `(from,to)`: `pinned = OR`, `reasons` and `sources` unioned and sorted.                                                                                                                                                                                                                                                                                                 | Unknown unit id: `E_EDGE_UNKNOWN_UNIT`. Self edge: `E_EDGE_SELF`. Cycles allowed (`W_CYCLE` with path); closure and propagation are cycle-safe.                                                                             |
+| `inputs`       | Every enabled plugin                                      | Union of plugin `global`, core `tallyrelease.yaml`, config `globalInputs`. `plugins.<name>.globalInputs: false` disables that plugin's defaults; core strips this key before validating plugin `options`.                                                                                                                                                                                | None (union).                                                                                                                                                                                                               |
+| `versionFiles` | Owning plugin only, per owned unit                        | Config overlays may not add files in v1.                                                                                                                                                                                                                                                                                                                                                 | A path claimed by two units: `E_VERSION_FILE_CLAIM`.                                                                                                                                                                        |
+| `schemes`      | Registry built at load                                    | Name -> scheme. `semver` is reserved by core.                                                                                                                                                                                                                                                                                                                                            | Raised by `validateRelease` (`check`, `computePlan`), never by `affected`. Duplicate name: `E_SCHEME_CLASH`. Unknown scheme of a released unit: `E_SCHEME_UNKNOWN`. Group members with different schemes: `E_GROUP_SCHEME`. |
+| `intent`       | All sources of enabled plugins, per distinct commit range | Concatenate Changes. Per unit: bump = max. Commit-derived Changes deduped by `sha,type,breaking`, plus explicit `units`.                                                                                                                                                                                                                                                                 | Release-As problems warn (history cannot be edited): different values for one unit, newest commit wins (`W_RELEASE_AS_CONFLICT`); see A.7.6 step 6.                                                                         |
+| `options`      | At load                                                   | Validated against `plugins.<name>` minus core-owned keys (`globalInputs`).                                                                                                                                                                                                                                                                                                               | `E_PLUGIN_OPTIONS` with schema issues.                                                                                                                                                                                      |
 
 Hook rules: hooks are awaited one at a time in config order; inputs are frozen in dev/test; hooks must be deterministic for equal inputs; thrown errors are wrapped as `E_PLUGIN_HOOK` with plugin and hook name. Effects and changelog rendering are not plugin hooks in v1 (both additive later).
 
@@ -278,7 +279,7 @@ Hook rules: hooks are awaited one at a time in config order; inputs are frozen i
 
 **A.7.2 Graph.** As in A.6. Reverse adjacency precomputed; closure is BFS with a visited set. Topological order (used for propagation and the release list): Tarjan SCCs in dependency order, members of a cycle ordered by id.
 
-**A.7.3 Attribution (path-based only).** A path belongs to every unit whose `include` matches and `exclude` does not (`picomatch/posix` v4, `dot: true`). Commit file lists use `--no-renames`, so renames count for both old and new path. Scope narrowing/forcing is deferred.
+**A.7.3 Attribution (path-based only).** A path belongs to every unit whose `include` matches and `exclude` does not (`picomatch/posix` v4, `dot: true`). Commit file lists use `--no-renames`, so renames count for both old and new path. In the release set (A.7.6) a commit without files (`git commit --allow-empty`) is attributed to every released unit, as release-please does; the build set is unchanged, since such a commit changes no files. Scope narrowing/forcing is deferred.
 
 **A.7.4 Build set (v0.1).**
 
@@ -317,11 +318,11 @@ When the last successful run cannot be looked up, the base falls back to `before
 1. **Tag matching:** `tagFormat` compiles to an anchored regex: literal parts and `{id}` are regex-escaped, `{version}` must occur exactly once (else `E_TAG_FORMAT`), becomes `(.+)` and must parse with the unit's scheme. A unit's tags are sorted by `compare`, ties broken by tag name (semver ignores build metadata for precedence). `check` and `computePlan()` fail with `E_TAG_FORMAT_OVERLAP` if two released units render the same format, or if any existing tag parses for more than one released unit. Unreleased units are never matched, so units sharing a format such as `v{version}` never fail `check` while unreleased.
 2. **Base tag:** max by `compare` over `git.tagsMerged(head)` for the unit, prereleases skipped. **Line base:** highest such tag whose commit `isFirstParentAncestor(tag, head)`; may differ from the base tag after a maintenance branch is merged back. `sinceLineBase = countFirstParent(lineBase, head)` (from the root without a line base), `total = countFirstParent(null, head)`.
 3. **Commits:** `git.log(baseTag, head)` (no merges), in core commit order (A.5); intent sources run once per distinct range. Files minus `ignore` minus `globalInputs`, then attribution; a Change with `units` is attributed to those units; lockfile-only commits never bump. The unit's Changes are those attributed to `{R} ∪ reach(R)` (absorption, below); each commit counts once.
-4. **Own bump:** max over attributed Changes via `bumps.types` (default `feat: minor`, `fix`/`perf`/`revert: patch`, breaking: major). If `core(from).major == 0`: `preMajor.breaking` (default `minor`) and `preMajor.feat` (default `minor`).
-5. **From version:** the base tag version. Without a base tag, the first release adopts the declared version as `next` (owning plugin's version file value, else `scheme.initial()`), and commits since the root decide only whether the unit is in the release set.
-6. **Release-As:** overrides `next` for attributed units (must parse and exceed `from`, else `E_RELEASE_AS_INVALID`). Footers are not absorbed; a `Release-As:` attributed only to unreleased units is ignored with `W_RELEASE_AS_IGNORED`.
+4. **Own bump:** max over attributed Changes via `bumps.types` (merged over the defaults `feat: minor`, `fix`/`perf`/`revert: patch`; breaking: major, whatever the type). If `core(from).major == 0`: breaking changes use `preMajor.breaking` (default `minor`) and changes whose type level is `minor` use `preMajor.feat` (default `minor`), so `bumps.types: { feat: patch }` stays `patch`. The `preMajor.breaking: minor` default differs from release-please's default (`bump-minor-pre-major: false`, breaking gives `major`); repos relying on that default set `preMajor.breaking: major`, and remaining differences are labelled `release-config` in shadow.
+5. **From version:** the base tag version. Without a base tag (first release) `from` is `null` and `next = releaseAs ?? initialVersion` (unit overlay, else `defaults.initialVersion`, else `scheme.initial()`); commits since the root decide only whether the unit is pending. An initial version that does not exceed the unit's highest prerelease tag warns `W_INITIAL_BELOW_PRERELEASE`. A repo whose history predates its tags adopts tallyrelease by pushing a baseline tag (for example `core-v1.4.0` on the last release commit).
+6. **Release-As:** a footer value applies to the units its commit's Change is attributed to; the qualified form `<unit>@<version>` applies only to the named unit and adds no bump or change entry for it. Within one commit a qualified value beats a plain one for that unit. A single leading `v` is stripped before parsing (release-please parity). For an ungrouped unit the value overrides `next`, even below the computed bump; it must parse as a stable version (prerelease values such as `2.0.0-rc.1` are rejected) and exceed `from`, else it is ignored with `W_RELEASE_AS_INVALID`. Different values for one unit: the newest commit in core order wins, `W_RELEASE_AS_CONFLICT`. Unknown unit: `W_RELEASE_AS_UNKNOWN`. A qualified value naming an unreleased unit, or a plain value on a commit attributed to no released unit: `W_RELEASE_AS_IGNORED`. Footers are not absorbed. All Release-As problems warn, because history cannot be edited.
 
-Unreleased units never have a pending bump. No released unit while a branch rule matches: `W_NO_RELEASED_UNITS`.
+A unit is pending when it has a bump or a Release-As value; `next` is `null` otherwise. Unreleased units are never pending. No released unit while a branch rule matches: `W_NO_RELEASED_UNITS`. A released unit without a matching tag while some tag contains its id (delimited by non-alphanumeric characters): `W_NO_MATCHING_TAG`, a hint at tag format drift.
 
 **Absorption (unreleased units are transparent to released dependents).** For a released unit `R`, `reach(R)` is the set of unreleased units found by a reverse walk over edges (any edge, pinned or not) starting at `R`'s dependencies, with a visited set, never stepping into or through a released unit. Cycles among unreleased units terminate through the visited set. Absorbed Changes contribute their bump level only: `fix`/`perf`/`revert` give a patch and `feat` a minor, as for `R`'s own commits; breaking changes in an absorbed unit are capped at `minor`, because they break in-repo callers, not `R`'s consumers (a real break of `R` is a commit attributed to `R` or `Release-As`). A commit touching an absorbed unit and `R`, or reaching `R` by two paths, is one Change. Example: a `fix:` in an unreleased `packages/db` patches every released app that depends on it, directly or through other unreleased units; a `chore:` in `packages/tsconfig` reaches the apps and bumps nothing.
 
@@ -342,16 +343,16 @@ All four produce edges (build set); only pinning differs.
 
 **A.7.8 Linked groups (v0.2; `fixed` deferred).** Members with a bump share `next = max(bump_i(from_i))`; members without a bump are not released. Group prerelease `N` = max of members' `sinceLineBase`. Resolved before prerelease computation (fixes P3). Members must be released (`E_GROUP_NOT_RELEASED`). An absorbed bump is a pending bump: a member released only through absorption behaves like one with a direct change.
 
-**A.7.9 Branch rules and maintenance limits (v0.2).** First rule matching `--branch` or the current branch wins. Patterns support `*` and `{major}`/`{minor}` captures.
+**A.7.9 Branch rules and maintenance limits (v0.2).** First rule matching `--branch` or the current branch wins. Patterns are anchored and support `*` (any characters, including `/`) and `{major}`/`{minor}` captures (`0|[1-9][0-9]*`); each token at most once, `{minor}` only with `{major}`, anything else in braces is `E_BRANCH_RULE`. A maintenance rule caps bumps at `minor` with `{major}` and at `patch` with `{minor}` (`line.maxBump`).
 
 | Rule shape                  | Default (relative) check per releasing unit               | Absolute check                                                                                              |
 | :-------------------------- | :-------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
 | `release/{major}.x`         | max bump `minor` (`core(next).major == core(from).major`) | only if the rule sets `unit: <id>` or the repo has exactly one released unit: `core(from).major == {major}` |
 | `release/{major}.{minor}.x` | max bump `patch` (same major and minor as `from`)         | as above, also `core(from).minor == {minor}`                                                                |
 
-Violation: `E_CAP` naming unit, limit and the commit(s) that produced the offending bump. Absolute mismatch: `E_CAP_BASE` (only in the absolute case). Relative limits keep monorepos correct: `release/1.x` named after `web` does not block `api` at `5.3.0` from releasing `5.3.1`. No matching rule: build set computed, versions `null`, `W_NO_BRANCH_RULE`.
+Violation: `E_CAP` naming unit, limit and the commit(s) that produced the offending bump. Absolute mismatch: `E_CAP_BASE` (only in the absolute case). Relative limits keep monorepos correct: `release/1.x` named after `web` does not block `api` at `5.3.0` from releasing `5.3.1`. No matching rule: build set computed, `line: null`, versions `null`, `W_NO_BRANCH_RULE`; `from`, `bump` and `next` are still computed with default-line rules.
 
-Channels: literal `[0-9A-Za-z-]+`, optionally containing `{major}`/`{minor}` tokens captured by the same rule (e.g. `rc-{major}`). `check` errors: same rendered channel on two rules (`E_CHANNEL_DUPLICATE`), a channel on a rule whose pattern contains `*` (`E_CHANNEL_WILDCARD`), any other token or character (`E_CHANNEL_INVALID`).
+Channels: literal `[0-9A-Za-z-]+` with at least one letter or dash outside tokens, optionally containing `{major}`/`{minor}` tokens captured by the same rule (e.g. `rc-{major}` renders `rc-1` on `release/1.x`). Errors raised by `validateRelease` (`check` and `computePlan`): same channel template on two rules (`E_CHANNEL_DUPLICATE`), a channel on a rule whose pattern contains `*` (`E_CHANNEL_WILDCARD`), any other token or character (`E_CHANNEL_INVALID`).
 
 **A.7.10 Version and kind (v0.2).**
 
@@ -362,7 +363,7 @@ Channels: literal `[0-9A-Za-z-]+`, optionally containing `{major}`/`{minor}` tok
 | yes          | no           | any     | `rebuild`                         | `null`                                                                              |
 | no           | yes          | any     | `none` (listed only with `--all`) | `null`                                                                              |
 
-Unreleased units never have a pending bump: they are kind `rebuild` when affected and never listed as kind `none` under `--all`.
+Unreleased units never have a pending bump: they are kind `rebuild` when affected and never listed as kind `none` under `--all`. Units outside the build set without a pending release are not listed. `next` is set for every pending unit, whatever its kind.
 
 Stable releases are not units of the HEAD computation. `plan.released` is derived from durable facts only: every stable unit tag whose commit lies on HEAD's first-parent chain in `(build.base, HEAD]` (all such commits when `base` is `null`). Because the build base falls back to `lastSuccess` after a failed run (A.7.5), releases whose publish failed are emitted again by the next run; publishers treat "already published" as success.
 
@@ -407,19 +408,27 @@ interface AffectedDoc {
 interface Plan extends Omit<AffectedDoc, "units"> {
   // tallyrelease plan --json (v0.2)
   line: {
+    rule: string; // the matching branch rule's name
     kind: "default" | "maintenance";
-    channel: string | null;
+    channel: string | null; // rendered with the rule's captures
     maxBump: "minor" | "patch" | null;
-    absolute: { unit: string | null; major: number; minor?: number } | null;
-  } | null;
+    absolute: {
+      unit: string | null;
+      group: string | null;
+      major: number;
+      minor?: number;
+    } | null;
+  } | null; // null: no rule matches (W_NO_BRANCH_RULE)
   units: UnitPlan[]; // topological order, cycles by id
-  released: ReleasedUnit[]; // v0.3, from release tags in (build.base, HEAD] (A.7.10)
+  groups: GroupPlan[]; // sorted by name
+  released: ReleasedUnit[]; // [] in v0.2; v0.3: from release tags in (build.base, HEAD] (A.7.10)
 }
 interface UnitPlan {
   id: string;
   path: string /* = Unit.root */;
   plugin: string;
   scheme: string;
+  tags: string[]; // Unit.tags
   group: string | null;
   affected: {
     reason: "direct" | "dependent" | "global" | "all";
@@ -428,21 +437,34 @@ interface UnitPlan {
   kind: "prerelease" | "rebuild" | "none";
   baseTag: string | null;
   lineBaseTag: string | null;
-  from: string | null;
+  from: string | null; // null: first release
   bump: BumpLevel | null;
+  releaseAs: string | null; // the applied Release-As value
   propagatedFrom: string[];
   absorbedFrom: string[]; // unreleased unit ids whose Changes were absorbed (A.7.6), sorted, unique
-  next: string | null;
-  version: string | null;
-  sha: string;
+  next: string | null; // null: not pending
+  version: string | null; // set for kind prerelease
+  sha: string; // plan head
   changes: {
-    sha: string;
+    // core commit order (A.5)
+    sha?: string; // absent for file-based changes
     type: string;
     breaking: boolean;
     scope?: string;
     subject: string;
     pr?: number;
+    via?: string; // absorbed unit
+    releaseAs?: string; // this commit's Release-As value for the unit, normalized; only values that parse
   }[];
+}
+interface GroupPlan {
+  name: string;
+  members: string[];
+  baseTag: string | null;
+  from: string | null;
+  bump: BumpLevel | null;
+  next: string | null;
+  version: string | null;
 }
 interface ReleasedUnit {
   // v0.3
@@ -460,7 +482,7 @@ interface ReleasedUnit {
 
 `explain` and the changelog list absorbed Changes under the released unit with `via <unit>`. Build selection in `AffectedDoc` does not depend on release status; `released` only reports it.
 
-The cli publishes `plan.schema.json` and `affected.schema.json` (generated from zod) in the npm package. Breaking changes bump `schema`.
+The cli publishes `plan.schema.json` and `affected.schema.json` (generated from zod) in the npm package. The schemas are strict (`additionalProperties: false`). Within schema 1, new optional fields and new enum values are allowed; consumers validate with the schema of the tool release they run. Removing or renaming fields bumps `schema`. Fields filled by later milestones are emitted with their empty values (`group: null`, `groups: []`, `released: []`).
 
 ### A.9 CLI surface
 
@@ -479,7 +501,7 @@ Global flags: `--cwd`, `--config`, `--token` (else `GITHUB_TOKEN`), `--verbose`.
 
 ### A.10 Configuration (`tallyrelease.yaml`)
 
-Defaults: units are not released (`release: false`, `version: none`); `tagFormat` = `{id}-v{version}`; a unit at root `.` defaults to `v{version}` (release-please parity for single repos); `propagate: auto`.
+Defaults: units are not released (`release: false`, `version: none`); `tagFormat` = `{id}-v{version}`; a unit at root `.` defaults to `v{version}` (release-please parity for single repos); `propagate: auto`; `initialVersion` = the scheme's initial version (semver `1.0.0`).
 
 The config schema is published as `dist/tallyrelease.schema.json` (export `@tallyrelease/cli/tallyrelease.schema.json`, also on jsDelivr), generated from the zod `configSchema`; an optional top-level `$schema` key is accepted and ignored.
 
@@ -487,12 +509,17 @@ Releasing is an explicit repo decision. `release: true` (per unit) or `defaults.
 
 Unit overlays accept `tags` (labels such as `docker` or `npm`, same characters as ids) to split the build set by kind with `affected --tag`. There are no default or plugin-provided tags.
 
+`initialVersion` (in `defaults` or a unit overlay, parsed by the unit's scheme, else `E_INITIAL_VERSION`) is the version of a unit's first release (A.7.6). To adopt tallyrelease in a repo whose history predates its tags, push a baseline tag for each released unit instead. `branches` are matched in order (A.7.9); `line` is required, `channel` optional. `bumps.types` is merged over the defaults; `bumps.preMajor` applies while the major version is 0: `breaking` to breaking changes, `feat` to changes whose type level is `minor`. Its default `breaking: minor` differs from release-please's default (`bump-minor-pre-major: false`); set `preMajor.breaking: major` for parity, otherwise shadow labels the difference `release-config`.
+
+While release-please owns versions, do not use qualified `Release-As: <unit>@<version>` footers: release-please reads `core@1.0.0` as a version. Plain `Release-As: <version>` footers work in both.
+
 ```yaml
 # Yarn monorepo (app-stack consumer)
 plugins:
   node: {} # map: only listed plugins run, in this order
 defaults:
   tagFormat: "{id}-source-v{version}" # set to the repo's existing tags for shadow parity
+  initialVersion: 0.1.0 # first release without a tag; default: the scheme's initial version
 units: # overlays keyed by root path; undiscovered root => config-only unit
   ".": {} # id defaults to the repo name; build-only
   "apps/web": { id: web, release: true, tags: [docker] } # tags: labels for affected --tag
@@ -527,6 +554,7 @@ units:
 branches:
   - { name: main, line: default }
   - { name: "{major}.x", line: maintenance } # single released unit: absolute check applies
+# v0.3
 tags:
   floating: ["v{major}"]
 ```

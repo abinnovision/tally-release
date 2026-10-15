@@ -122,6 +122,8 @@ export interface PlanFacts {
 	readonly units: readonly UnitFacts[];
 	/** One entry per distinct base tag commit. */
 	readonly ranges: readonly RangeFacts[];
+	/** Every tag name, sorted. */
+	readonly tagNames: readonly string[];
 	/** Warnings logged by intent sources and for unknown explicit units. */
 	readonly warnings: readonly Warning[];
 }
@@ -140,7 +142,8 @@ export const collectPlanFacts = async (
 		ctx: ctx(entry.plugin, entry.options),
 	}));
 	const schemes = schemeRegistry(workspace.schemes);
-	const tags = matchUnitTags(workspace.units, await git.tags(), schemes);
+	const allTags = await git.tags();
+	const tags = matchUnitTags(workspace.units, allTags, schemes);
 	const merged = new Set((await git.tagsMerged(head)).map((t) => t.name));
 	const total = await git.countFirstParent(null, head);
 
@@ -148,6 +151,10 @@ export const collectPlanFacts = async (
 	const isGlobal = matcher(workspace.globalInputs);
 	const owners = attribution(workspace.units);
 	const known = new Set(workspace.units.map((u) => u.id));
+	// File-less commits belong to every released unit (release-please parity).
+	const released = workspace.units
+		.filter((u) => u.version !== "none")
+		.map((u) => u.id);
 	const warned = new Set<string>();
 	const warnUnknown = (plugin: string, changes: readonly Change[]) => {
 		for (const id of changes.flatMap((c) => c.units ?? [])) {
@@ -190,9 +197,13 @@ export const collectPlanFacts = async (
 		const commitUnits = new Map(
 			commits.map((c) => [
 				c.sha,
-				uniqueSorted(
-					c.files.filter((f) => !ignored(f) && !isGlobal(f)).flatMap(owners),
-				),
+				c.files.length === 0
+					? released
+					: uniqueSorted(
+							c.files
+								.filter((f) => !ignored(f) && !isGlobal(f))
+								.flatMap(owners),
+						),
 			]),
 		);
 
@@ -273,5 +284,11 @@ export const collectPlanFacts = async (
 		});
 	}
 
-	return { head, units, ranges: [...ranges.values()], warnings };
+	return {
+		head,
+		units,
+		ranges: [...ranges.values()],
+		tagNames: uniqueSorted(allTags.map((t) => t.name)),
+		warnings,
+	};
 };

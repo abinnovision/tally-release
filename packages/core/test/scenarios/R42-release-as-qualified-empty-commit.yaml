@@ -1,0 +1,35 @@
+description: >-
+  A qualified Release-As in an empty commit releases the named unit without a
+  bump; the empty commit is attributed to every released unit.
+plugins:
+  - name: stub
+    units:
+      - { id: core, root: packages/core }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/core/index.ts: "0" }
+    - id: c1
+      message: "chore: release core\n\nRelease-As: core@1.0.0"
+  tags:
+    - { name: core-v0.1.0, commit: c0 }
+base: null
+plan: {}
+expect:
+  plan:
+    units:
+      - id: core
+        affected: { reason: all }
+        kind: prerelease
+        from: 0.1.0
+        bump: null
+        releaseAs: 1.0.0
+        next: 1.0.0
+        version: 1.0.0-beta.1
+        changes: [{ sha: c1, type: chore, releaseAs: 1.0.0 }]
+    warnings: []

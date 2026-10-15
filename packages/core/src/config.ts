@@ -1,4 +1,4 @@
-import type { Propagate, VersionSource } from "./plugin.js";
+import type { BumpLevel, Propagate, VersionSource } from "./plugin.js";
 
 /** Config overlay for the unit at a root; creates a config-only unit if none is discovered. */
 export interface UnitOverlay {
@@ -14,6 +14,24 @@ export interface UnitOverlay {
 	propagate?: Propagate;
 	/** Labels for filtering, each matching `/^[A-Za-z0-9._-]+$/`. */
 	tags?: string[];
+	/** First release version, parsed by the unit's scheme. */
+	initialVersion?: string;
+}
+
+/** A branch rule; the first rule whose `name` matches the branch wins. */
+export interface BranchConfig {
+	/** Pattern with `*`, `{major}` and `{minor}`. */
+	name: string;
+	line: "default" | "maintenance";
+	/** Prerelease channel, may use the `{major}`/`{minor}` captures of `name`. */
+	channel?: string;
+}
+
+export interface BumpsConfig {
+	/** Commit type to level, merged over the defaults. */
+	types?: Record<string, BumpLevel>;
+	/** Levels used while the major version is 0. */
+	preMajor?: { breaking?: BumpLevel; feat?: BumpLevel };
 }
 
 export interface DepConfig {
@@ -30,12 +48,19 @@ export interface TallyConfig {
 	 * key `globalInputs: false` disables that plugin's default global inputs.
 	 */
 	plugins: Record<string, Record<string, unknown> | null>;
-	defaults?: { release?: boolean; tagFormat?: string; propagate?: Propagate };
+	defaults?: {
+		release?: boolean;
+		tagFormat?: string;
+		propagate?: Propagate;
+		initialVersion?: string;
+	};
 	/** Overlays keyed by unit root. */
 	units?: Record<string, UnitOverlay>;
 	deps?: DepConfig[];
 	ignore?: string[];
 	globalInputs?: string[];
+	branches?: BranchConfig[];
+	bumps?: BumpsConfig;
 }
 
 /** Global input owned by core. */

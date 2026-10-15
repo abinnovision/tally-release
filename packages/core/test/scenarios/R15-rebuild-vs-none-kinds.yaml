@@ -1,0 +1,71 @@
+description: >-
+  Affected units with a pending release are prereleases, other affected units
+  rebuilds; with all, released units outside the build set with a pending
+  release are listed as none.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+      - { id: d, root: packages/d }
+      - { id: e, root: packages/e }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/d: { release: false }
+    packages/e: { release: false }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+        packages/d/index.ts: "0"
+        packages/e/index.ts: "0"
+    - id: c1
+      message: "feat: c"
+      files: { packages/c/index.ts: "1" }
+    - id: c2
+      message: "feat: a"
+      files: { packages/a/index.ts: "2" }
+    - id: c3
+      message: "chore: b and d"
+      files: { packages/b/index.ts: "3", packages/d/index.ts: "3" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c1
+plan: { all: true }
+expect:
+  plan:
+    units:
+      - id: a
+        affected: { reason: direct }
+        kind: prerelease
+        next: 1.1.0
+        version: 1.1.0-beta.3
+      - id: b
+        kind: rebuild
+        bump: null
+        next: null
+        version: null
+        changes: [{ sha: c3, type: chore }]
+      - id: c
+        affected: null
+        kind: none
+        next: 1.1.0
+        version: null
+      - id: d
+        affected: { reason: direct }
+        kind: rebuild
+        baseTag: null
+        from: null
+        next: null
+        changes: []
+    warnings: []

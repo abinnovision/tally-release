@@ -1,0 +1,43 @@
+description: >-
+  Release-As on two merged branches; the newer committer date wins although
+  its branch was merged first.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: x1
+      parents: [c0]
+      message: "chore: x\n\nRelease-As: a@3.0.0"
+      date: "2024-03-01T00:00:00Z"
+      files: { packages/a/x.ts: "1" }
+    - id: y1
+      parents: [c0]
+      message: "chore: y\n\nRelease-As: a@2.0.0"
+      date: "2024-02-01T00:00:00Z"
+      files: { packages/a/y.ts: "1" }
+    - id: m1
+      parents: [c0, x1]
+      message: "Merge branch 'x'"
+    - id: m2
+      parents: [m1, y1]
+      message: "Merge branch 'y'"
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, releaseAs: 3.0.0, next: 3.0.0 }
+    warnings:
+      - code: W_RELEASE_AS_CONFLICT
+        message: 'unit "a": Release-As "3.0.0" in x1 wins over "2.0.0" in y1'

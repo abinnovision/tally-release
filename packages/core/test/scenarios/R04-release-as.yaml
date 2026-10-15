@@ -1,0 +1,39 @@
+description: >-
+  A plain Release-As footer on a commit attributed to the unit overrides next;
+  a single leading v is stripped, also in the change entry.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore: release 2.0.0\n\nRelease-As: v2.0.0"
+      files: { packages/a/index.ts: "2" }
+  tags:
+    - { name: a-v1.2.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        from: 1.2.0
+        bump: patch
+        releaseAs: 2.0.0
+        next: 2.0.0
+        version: 2.0.0-beta.2
+        changes:
+          - { sha: c2, type: chore, releaseAs: 2.0.0 }
+          - { sha: c1, type: fix }
+    warnings: []

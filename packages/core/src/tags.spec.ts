@@ -16,6 +16,7 @@ const unit = (id: string, tagFormat: string, released = true): Unit => ({
 	tagFormat,
 	propagate: "auto",
 	tags: [],
+	initialVersion: null,
 	meta: {},
 });
 

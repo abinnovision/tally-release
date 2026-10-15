@@ -1,0 +1,28 @@
+description: Without tags the first release is the scheme's initial version.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        from: null
+        bump: minor
+        next: 1.0.0
+        version: 1.0.0-beta.2
+    warnings: []

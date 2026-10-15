@@ -1,0 +1,34 @@
+description: A root unit with tag versions uses v{version} tags.
+plugins:
+  - name: php
+    units:
+      - { id: lib, root: ".", version: tag }
+config:
+  plugins: { php: {} }
+  units:
+    ".": { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { composer.json: "{}", src/a.php: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { src/a.php: "1" }
+  tags:
+    - { name: v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  units:
+    - { id: lib, version: tag, tagFormat: "v{version}" }
+  plan:
+    units:
+      - id: lib
+        path: "."
+        plugin: php
+        baseTag: v1.0.0
+        next: 1.0.1
+        version: 1.0.1-beta.1
+    warnings: []

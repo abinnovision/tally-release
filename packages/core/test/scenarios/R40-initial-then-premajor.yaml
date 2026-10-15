@@ -1,0 +1,26 @@
+description: After a 0.x initial release a breaking change bumps the minor version.
+plugins:
+  - name: stub
+    units:
+      - { id: core, root: packages/core }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, initialVersion: 0.1.0 }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/core/index.ts: "0" }
+    - id: c1
+      message: "feat!: new api"
+      files: { packages/core/index.ts: "1" }
+  tags:
+    - { name: core-v0.1.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: core, from: 0.1.0, bump: minor, next: 0.2.0 }
+    warnings: []

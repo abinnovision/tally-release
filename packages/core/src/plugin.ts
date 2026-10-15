@@ -107,6 +107,8 @@ export interface Unit {
 	readonly propagate: Propagate;
 	/** From the config overlay; sorted, unique. */
 	readonly tags: readonly string[];
+	/** Config overlay, else `defaults.initialVersion`; null uses `scheme.initial()`. */
+	readonly initialVersion: string | null;
 	readonly meta: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 

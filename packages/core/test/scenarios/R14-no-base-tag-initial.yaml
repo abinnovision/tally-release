@@ -1,0 +1,42 @@
+description: >-
+  Without a stable tag the first release uses the initial version; a unit whose
+  tags do not match its format warns.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "feat: a and b"
+      files: { packages/a/index.ts: "2", packages/b/index.ts: "2" }
+  tags:
+    - { name: a-v1.0.0-beta.1, commit: c1 }
+    - { name: b-1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        baseTag: null
+        lineBaseTag: null
+        from: null
+        bump: minor
+        next: 1.0.0
+        version: 1.0.0-beta.3
+      - { id: b, baseTag: null, from: null, next: 1.0.0, version: 1.0.0-beta.3 }
+    warnings:
+      - code: W_NO_MATCHING_TAG
+        message: 'released unit "b" has no tag matching "b-v{version}", but "b-1.0.0" contains its id'

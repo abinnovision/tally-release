@@ -1,0 +1,32 @@
+description: >-
+  Tags matched by another released unit do not count for W_NO_MATCHING_TAG;
+  an unmatched tag containing the id does.
+plugins:
+  - name: stub
+    units:
+      - { id: api, root: packages/api }
+      - { id: api-client, root: packages/api-client }
+      - { id: web, root: packages/web }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/api/index.ts: "0"
+        packages/api-client/index.ts: "0"
+        packages/web/index.ts: "0"
+  tags:
+    - { name: api-client-v1.0.0, commit: c0 }
+    - { name: web-1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units: []
+    warnings:
+      - code: W_NO_MATCHING_TAG
+        message: 'released unit "web" has no tag matching "web-v{version}", but "web-1.0.0" contains its id'

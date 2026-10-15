@@ -1,0 +1,65 @@
+description: Two feats and a fix give a minor prerelease numbered by first-parent commits since the line base.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: one"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "feat: two"
+      files: { packages/a/index.ts: "2" }
+    - id: c3
+      message: "fix: three"
+      files: { packages/a/index.ts: "3" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    branch: main
+    head: c3
+    line:
+      {
+        rule: main,
+        kind: default,
+        channel: beta,
+        maxBump: null,
+        absolute: null,
+      }
+    units:
+      - id: a
+        path: packages/a
+        plugin: stub
+        scheme: semver
+        tags: []
+        group: null
+        affected: { reason: direct, via: [] }
+        kind: prerelease
+        baseTag: a-v1.0.0
+        lineBaseTag: a-v1.0.0
+        from: 1.0.0
+        bump: minor
+        releaseAs: null
+        propagatedFrom: []
+        absorbedFrom: []
+        next: 1.1.0
+        version: 1.1.0-beta.3
+        sha: c3
+        changes:
+          - { sha: c3, type: fix, breaking: false, subject: three }
+          - { sha: c2, type: feat, breaking: false, subject: two }
+          - { sha: c1, type: feat, breaking: false, subject: one }
+    groups: []
+    released: []
+    warnings: []

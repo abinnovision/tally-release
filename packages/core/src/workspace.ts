@@ -3,6 +3,7 @@ import { CONFIG_FILE } from "./config.js";
 import { discoverUnits } from "./discover.js";
 import { buildGraph } from "./graph.js";
 import { activatePlugins, runHook } from "./plugins.js";
+import { releaseSettings } from "./release.js";
 import { collectSchemes } from "./schemes.js";
 import { uniqueSorted } from "./util.js";
 
@@ -11,6 +12,7 @@ import type { Warning } from "./errors.js";
 import type { Graph, SourcedEdge } from "./graph.js";
 import type { IntentSource, Unit } from "./plugin.js";
 import type { ActivePlugin, PluginEnv } from "./plugins.js";
+import type { ReleaseSettings } from "./release.js";
 import type { SchemeEntry } from "./schemes.js";
 
 const collectEdges = async (
@@ -90,6 +92,8 @@ export interface Workspace {
 	readonly schemes: readonly SchemeEntry[];
 	/** Core sources first, then enabled plugins in config order. */
 	readonly intents: readonly IntentEntry[];
+	/** Bumps and branch rules with defaults applied. */
+	readonly release: ReleaseSettings;
 }
 
 /** Runs plugin hooks sequentially in config order and builds the graph. */
@@ -129,5 +133,6 @@ export const loadWorkspace = async (
 		warnings: [...warnings, ...graph.warnings],
 		schemes: collectSchemes(active),
 		intents,
+		release: releaseSettings(input.config),
 	};
 };

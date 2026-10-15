@@ -1,0 +1,30 @@
+description: A qualified value naming an unreleased unit warns and is ignored.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a\n\nRelease-As: b@2.0.0"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, releaseAs: null, next: 1.0.1 }
+    warnings:
+      - code: W_RELEASE_AS_IGNORED
+        message: 'Release-As "b@2.0.0" in c1 names unreleased unit "b"'
