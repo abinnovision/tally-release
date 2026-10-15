@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.0](https://github.com/abinnovision/tally-release/compare/cli-v0.1.1...cli-v0.2.0) (2026-10-15)
+
+
+### Features
+
+* add fixed groups ([#23](https://github.com/abinnovision/tally-release/issues/23)) ([9822ded](https://github.com/abinnovision/tally-release/commit/9822dedcb572b852348e7df3577d101bf4d70e62))
+* **cli:** add plan --summary for GitHub step summaries ([#28](https://github.com/abinnovision/tally-release/issues/28)) ([7f6f156](https://github.com/abinnovision/tally-release/commit/7f6f156b291ed138a5dc170fc2a48dc332702e7a))
+* **cli:** add plan and explain commands ([#20](https://github.com/abinnovision/tally-release/issues/20)) ([4a68ff1](https://github.com/abinnovision/tally-release/commit/4a68ff10092b44fb994fd62f86a51b7af4bdbd5f))
+* **cli:** add shadow comparison against release-please ([#21](https://github.com/abinnovision/tally-release/issues/21)) ([2623aae](https://github.com/abinnovision/tally-release/commit/2623aaee6e8e653218f5623658e25fa97de62176))
+* **core:** absorb internal changes as patch by default ([#22](https://github.com/abinnovision/tally-release/issues/22)) ([947b85f](https://github.com/abinnovision/tally-release/commit/947b85fd442ca650f0a47ee2349ffe41b9ea5b69))
+* **core:** compute release versions with computePlan ([#18](https://github.com/abinnovision/tally-release/issues/18)) ([0341c3e](https://github.com/abinnovision/tally-release/commit/0341c3eea127abf32c1eda59344481a3ee506e84))
+* **core:** match unit tags and collect plan facts ([#17](https://github.com/abinnovision/tally-release/issues/17)) ([828f9bd](https://github.com/abinnovision/tally-release/commit/828f9bd427b6e69419bdbb00d6570edee0cd9e0e))
+* enforce maintenance branch limits ([#24](https://github.com/abinnovision/tally-release/issues/24)) ([c5e382b](https://github.com/abinnovision/tally-release/commit/c5e382bb1d58430555b85d8076659272353c1e30))
+
+
+### Bug Fixes
+
+* **cli:** fail on unreadable git blobs instead of treating them as absent ([#29](https://github.com/abinnovision/tally-release/issues/29)) ([1b5cad9](https://github.com/abinnovision/tally-release/commit/1b5cad9026c99fd687f60aecadf3e5cf69c9a47e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @tallyrelease/core bumped to 0.2.0
+
 ## [0.1.1](https://github.com/abinnovision/tally-release/compare/cli-v0.1.0...cli-v0.1.1) (2026-10-15)
 
 
