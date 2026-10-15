@@ -24,6 +24,7 @@ export const graph = async (
 		path: u.root,
 		plugin: u.plugin,
 		version: u.version,
+		tags: [...u.tags],
 	}));
 	const edges = workspace.graph.edges.map((e) => ({
 		from: e.from,
@@ -55,13 +56,15 @@ export const graph = async (
 	}
 
 	const paint = painter(session.stdout);
+	const tagged = units.some((u) => u.tags.length > 0);
 	const table = [
-		["UNIT", "PATH", "PLUGIN", "RELEASE"],
+		["UNIT", "PATH", "PLUGIN", "RELEASE", ...(tagged ? ["TAGS"] : [])],
 		...units.map((u) => [
 			u.id,
 			u.path,
 			u.plugin,
 			u.version === "none" ? "-" : u.version,
+			...(tagged ? [u.tags.join(",")] : []),
 		]),
 	];
 	// Header is aligned unstyled so column styles do not apply to it.

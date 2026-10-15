@@ -11,7 +11,7 @@ const multiline = (key: string, value: string): string => {
 /** `$GITHUB_OUTPUT` entries of `affected`; units are ordered by id. */
 export const affectedGithubOutput = (doc: AffectedDoc): string =>
 	[
-		`affected=${JSON.stringify(doc.units.map(({ id, path, reason }) => ({ id, path, reason })))}\n`,
+		`affected=${JSON.stringify(doc.units.map(({ id, path, plugin, reason, released, tags }) => ({ id, path, plugin, reason, released, tags })))}\n`,
 		multiline("affected-paths", doc.units.map((u) => u.path).join("\n")),
 		`all=${String(doc.build.all)}\n`,
 		`base=${doc.build.base ?? ""}\n`,

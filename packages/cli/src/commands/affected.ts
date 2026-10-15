@@ -41,9 +41,16 @@ const baseLabel = (base: BuildBase): string => {
 
 const tsv = (doc: AffectedDoc): string =>
 	[
-		"id\tpath\treason\tvia",
+		"id\tpath\treason\tvia\treleased\ttags",
 		...doc.units.map((u) =>
-			[u.id, u.path, u.reason, u.via.join(",")].join("\t"),
+			[
+				u.id,
+				u.path,
+				u.reason,
+				u.via.join(","),
+				String(u.released),
+				u.tags.join(","),
+			].join("\t"),
 		),
 	]
 		.map((line) => `${line}\n`)
@@ -55,6 +62,8 @@ export interface AffectedFlags {
 	json?: boolean;
 	out?: string;
 	githubOutput?: boolean;
+	/** Keeps units with at least one of these tags. */
+	tag?: string[];
 }
 
 /** Computes the build set and writes the requested outputs. */
@@ -88,9 +97,20 @@ export const affected = async (
 		base: base.base,
 		baseSource: base.source,
 	});
+	const tags = new Set(flags.tag ?? []);
+	const known = new Set(workspace.units.flatMap((u) => u.tags));
+	const unknownTags = [...tags]
+		.filter((t) => !known.has(t))
+		.map((t) => ({
+			code: "W_TAG_UNKNOWN",
+			message: `no unit has tag "${t}"`,
+		}));
+	const selected = (u: { tags: readonly string[] }) =>
+		tags.size === 0 || u.tags.some((t) => tags.has(t));
 	const doc = {
 		...computed,
-		warnings: [...computed.warnings, ...base.warnings],
+		units: computed.units.filter(selected),
+		warnings: [...computed.warnings, ...base.warnings, ...unknownTags],
 	};
 	session.warn(doc.warnings);
 
@@ -125,15 +145,12 @@ export const affected = async (
 	}
 
 	const paint = painter(session.stdout);
-	const released = new Set(
-		workspace.units.filter((u) => u.version !== "none").map((u) => u.id),
-	);
 	const rows = alignColumns(
 		doc.units.map((u) => [
 			u.id,
 			u.path,
 			u.via.length > 0 ? `via ${u.via.join(", ")}` : "",
-			released.has(u.id) ? "released" : "",
+			u.released ? "released" : "",
 		]),
 		{ indent: 2, styles: [undefined, "dim", "dim", "cyan"] },
 		paint,
@@ -165,7 +182,7 @@ export const affected = async (
 			: "";
 	lines.push(
 		doc.units.length > 0
-			? `${String(doc.units.length)} of ${count(workspace.units.length, "unit")} affected${outside}`
+			? `${String(doc.units.length)} of ${count(workspace.units.filter(selected).length, "unit")} affected${outside}`
 			: `no units affected${outside}`,
 	);
 	session.stdout.write(`${lines.join("\n")}\n`);

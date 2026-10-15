@@ -32,6 +32,8 @@ export const affectedDocSchema = z.strictObject({
 			plugin: z.string(),
 			reason,
 			via: z.array(z.string()),
+			released: z.boolean(),
+			tags: z.array(z.string()),
 		}),
 	),
 	unattributed: z.array(z.string()),

@@ -12,6 +12,8 @@ export interface UnitOverlay {
 	scheme?: string;
 	tagFormat?: string;
 	propagate?: Propagate;
+	/** Labels for filtering, each matching `/^[A-Za-z0-9._-]+$/`. */
+	tags?: string[];
 }
 
 export interface DepConfig {

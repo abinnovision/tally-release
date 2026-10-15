@@ -134,10 +134,10 @@ describe("affected text and tsv (G28)", () => {
 		expect(await affected(["--format", "tsv", "--base", "p1"])).toEqual({
 			code: 0,
 			stdout: [
-				"id\tpath\treason\tvia",
-				"api\tapps/api\tdirect\t",
-				"ui\tlibs/ui\tdirect\t",
-				"web\tapps/web\tdependent\tui",
+				"id\tpath\treason\tvia\treleased\ttags",
+				"api\tapps/api\tdirect\t\tfalse\t",
+				"ui\tlibs/ui\tdirect\t\ttrue\t",
+				"web\tapps/web\tdependent\tui\tfalse\t",
 				"",
 			].join("\n"),
 			stderr: "",

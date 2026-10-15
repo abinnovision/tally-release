@@ -14,9 +14,9 @@ import type { Dag } from "@tallyrelease/core/testing";
 const config = `
 plugins: {}
 units:
-  libs/ui: { id: ui }
-  apps/web: { id: web }
-  apps/api: { id: api }
+  libs/ui: { id: ui, release: true, tags: [npm] }
+  apps/web: { id: web, tags: [docker] }
+  apps/api: { id: api, tags: [docker] }
 deps:
   - { from: ui, to: web }
 `;
@@ -201,7 +201,7 @@ describe("affected", () => {
 		)?.[1];
 		expect(delimiter).toBeDefined();
 		expect(lines).toEqual([
-			'affected=[{"id":"api","path":"apps/api","reason":"direct"},{"id":"ui","path":"libs/ui","reason":"direct"},{"id":"web","path":"apps/web","reason":"dependent"}]',
+			'affected=[{"id":"api","path":"apps/api","plugin":"config","reason":"direct","released":false,"tags":["docker"]},{"id":"ui","path":"libs/ui","plugin":"config","reason":"direct","released":true,"tags":["npm"]},{"id":"web","path":"apps/web","plugin":"config","reason":"dependent","released":false,"tags":["docker"]}]',
 			`affected-paths<<${delimiter ?? ""}`,
 			"apps/api",
 			"libs/ui",
@@ -212,6 +212,65 @@ describe("affected", () => {
 			"base-source=cli",
 			"",
 		]);
+	});
+
+	it("--tag keeps units with any of the tags", async () => {
+		const dir = tmpDir("tag");
+		const output = join(dir, "github-output");
+		const docker = await affected(
+			["--base", "p1", "--tag", "docker", "--github-output"],
+			{ env: { GITHUB_OUTPUT: output } },
+		);
+		expect(docker.ids).toEqual(["api", "web"]);
+		expect(docker.doc.units[1]).toMatchObject({
+			via: ["ui"],
+			released: false,
+			tags: ["docker"],
+		});
+		expect(docker.doc.build.all).toBe(false);
+
+		const lines = readFileSync(output, "utf8").split("\n");
+		expect(lines[0]).toBe(
+			'affected=[{"id":"api","path":"apps/api","plugin":"config","reason":"direct","released":false,"tags":["docker"]},{"id":"web","path":"apps/web","plugin":"config","reason":"dependent","released":false,"tags":["docker"]}]',
+		);
+		expect(lines.slice(2, 4)).toEqual(["apps/api", "apps/web"]);
+
+		const both = await affected([
+			"--base",
+			"p0",
+			"--tag",
+			"npm",
+			"--tag",
+			"docker",
+		]);
+		expect(both.ids).toEqual(["api", "ui", "web"]);
+
+		const text = await runCli(
+			["affected", "--base", "p2", "--tag", "docker"],
+			memoryRepo(dag),
+		);
+		expect(text.stdout).toMatch(/\n1 of 2 units affected\n$/);
+
+		const tsv = await runCli(
+			[
+				"affected",
+				"--base",
+				"p1",
+				"--format",
+				"tsv",
+				"--tag",
+				"npm",
+				"--tag",
+				"nope",
+			],
+			memoryRepo(dag),
+		);
+		expect(tsv).toEqual({
+			code: 0,
+			stdout:
+				"id\tpath\treason\tvia\treleased\ttags\nui\tlibs/ui\tdirect\t\ttrue\tnpm\n",
+			stderr: 'warning[W_TAG_UNKNOWN]: no unit has tag "nope"\n',
+		});
 	});
 
 	it("a run cancelled while queued is covered by the last success (G13)", async () => {
