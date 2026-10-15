@@ -1,0 +1,58 @@
+name: Shadow
+
+on:
+  push:
+    branches:
+      - main
+
+# One group per commit, so a release merge is never cancelled by later pushes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  shadow:
+    name: Shadow
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn build
+      # Evidence only: mismatches and errors never fail the run until --strict.
+      - name: tallyrelease shadow
+        id: shadow
+        continue-on-error: true
+        run: |
+          node packages/cli/dist/bin.js shadow --out shadow-report.json --summary
+          cp "$GITHUB_STEP_SUMMARY" shadow-summary.md
+          echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> shadow-summary.md
+      - uses: actions/upload-artifact@v7
+        if: hashFiles('shadow-report.json') != ''
+        with:
+          name: shadow-report
+          path: |
+            shadow-report.json
+            shadow-summary.md
+      - name: Comment on the tracking issue
+        if: steps.shadow.outcome == 'success' && vars.SHADOW_ISSUE != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHADOW_ISSUE: ${{ vars.SHADOW_ISSUE }}
+        run: |
+          if jq -e '.skipped == null' shadow-report.json > /dev/null; then
+            gh issue comment "$SHADOW_ISSUE" --body-file shadow-summary.md
+          fi

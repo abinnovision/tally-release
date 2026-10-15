@@ -1,6 +1,12 @@
 # yaml-language-server: $schema=./node_modules/@tallyrelease/cli/dist/tallyrelease.schema.json
 plugins:
   node: {}
+# Mirrors release-please node-workspace and initial-version.
+defaults:
+  propagate: patch
+  initialVersion: 0.1.0
 units:
   packages/core: { id: core, release: true }
   packages/cli: { id: cli, release: true }
+branches:
+  - { name: main, line: default, channel: beta }

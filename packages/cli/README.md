@@ -45,6 +45,8 @@ Global flags: `--cwd <dir>` (repository root), `--config <file>` (default `tally
 - `tallyrelease plan [--branch <name>] [--base <ref>] [--head <ref>] [--all] [--format text|json] [--json] [--out <file>] [--github-output]` computes the release plan without changing anything: kind, base version, bump, next version and prerelease version per unit. `--head` plans another commit with the current config, `--all` also lists released units with a pending release outside the build set. `--github-output` writes `plan`, the path of the written plan (`--out`, else `$RUNNER_TEMP/tallyrelease-plan.json`). The JSON schema is exported as `@tallyrelease/cli/plan.schema.json`.
 - `tallyrelease explain <unit> [--branch <name>] [--base <ref>]` explains a unit: why it is affected, which commits and files bump it (including changes absorbed from unreleased dependencies), propagation and Release-As footers.
 
+- `tallyrelease shadow [--manifest <path>] [--rp-config <path>] [--head <ref>] [--branch <name>] [--pin <spec>] [--out <file>] [--summary] [--strict]` compares tallyrelease with a release-please release: on a push that changes the release-please manifest, it plans the parent commit and compares each unit's next version with the new manifest value. See [Shadow mode](#shadow-mode).
+
 Exit codes: `0` ok, `1` error, `2` usage. For scripts use `--format tsv` or `--json`; the text layout may change between versions.
 
 ## Build base
@@ -93,6 +95,26 @@ jobs:
     steps:
       - run: echo "build ${{ matrix.unit.id }} from ${{ matrix.unit.path }}"
 ```
+
+## Shadow mode
+
+While release-please owns versions, `shadow` checks that tallyrelease would have released the same versions. Run it on pushes to the default branch:
+
+```yaml
+shadow:
+  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+  steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - run: npx @tallyrelease/cli@<version> shadow --pin <version> --out shadow-report.json --summary
+```
+
+Pushes that do not change `.release-please-manifest.json` are skipped (`W_SHADOW_SKIPPED`). Each row is `match`, `mismatch`, `tallyrelease-only` or `rp-only`; known differences are labelled (`release-config`, `dependent-patch`, `absorbed-internal`, `group-vs-rp`, `separate-pr`, `squash-split`). `--strict` exits 1 on unlabelled rows. Replay an earlier release merge locally with `shadow --head <sha> --branch main`.
 
 ## Editor support
 
