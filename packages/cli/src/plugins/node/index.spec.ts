@@ -149,3 +149,71 @@ describe("node inputs", () => {
 		expect(single?.global).not.toContain("package.json");
 	});
 });
+
+describe("node version files", () => {
+	const core = unit("core", "packages/core", "@s/core");
+	const ui = unit("ui", "packages/ui", "@s/ui");
+	const cli = unit("cli", "packages/cli", "@s/cli");
+	const write = async (content: string, versions: Record<string, string>) => {
+		const [file] = (await nodePlugin.versionFiles?.(memoryCtx(), cli)) ?? [];
+		expect(file?.path).toBe("packages/cli/package.json");
+
+		return file?.write(content, versions["cli"] ?? "", {
+			unit: cli,
+			units: [core, ui, cli],
+			versions: new Map(Object.entries(versions)),
+		});
+	};
+
+	it("sets version to next (V07)", async () => {
+		const content = `${JSON.stringify({ name: "@s/cli", version: "1.0.0" }, null, 2)}\n`;
+		expect(await write(content, { cli: "1.1.0" })).toBe(
+			`${JSON.stringify({ name: "@s/cli", version: "1.1.0" }, null, 2)}\n`,
+		);
+	});
+
+	it("rewrites only pinned ranges of released units (V08)", async () => {
+		const manifest = (core: string, ui: string) => ({
+			name: "@s/cli",
+			version: "1.0.0",
+			dependencies: { "@s/core": core, "@s/ui": ui, other: "1.0.0" },
+			optionalDependencies: { "@s/ui": "workspace:*" },
+			peerDependencies: { "@s/core": "1.2.3" },
+			devDependencies: { "@s/core": "workspace:1.2.3" },
+		});
+		const parsed = async (core: string, ui: string) =>
+			JSON.parse(
+				(await write(JSON.stringify(manifest(core, ui)), {
+					cli: "1.0.1",
+					core: "1.3.0",
+					ui: "2.0.0",
+				})) ?? "",
+			) as unknown;
+
+		expect(await parsed("1.2.3", "workspace:=1.2.3")).toEqual({
+			...manifest("1.3.0", "workspace:=2.0.0"),
+			version: "1.0.1",
+		});
+		expect(await parsed("workspace:1.2.3", "^1.2.3")).toEqual({
+			...manifest("workspace:1.3.0", "^1.2.3"),
+			version: "1.0.1",
+		});
+		expect(await parsed("workspace:^", "workspace:~")).toEqual({
+			...manifest("workspace:^", "workspace:~"),
+			version: "1.0.1",
+		});
+	});
+
+	it("keeps tabs, key order, CRLF and the trailing newline (V09)", async () => {
+		const content = '{\n\t"version": "1.0.0",\n\t"name": "@s/cli"\n}';
+		expect(await write(content, { cli: "2.0.0" })).toBe(
+			'{\n\t"version": "2.0.0",\n\t"name": "@s/cli"\n}',
+		);
+		expect(await write(`${content}\n`, { cli: "2.0.0" })).toBe(
+			'{\n\t"version": "2.0.0",\n\t"name": "@s/cli"\n}\n',
+		);
+		expect(
+			await write(`${content.replaceAll("\n", "\r\n")}\r\n`, { cli: "2.0.0" }),
+		).toBe('{\r\n\t"version": "2.0.0",\r\n\t"name": "@s/cli"\r\n}\r\n');
+	});
+});

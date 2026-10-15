@@ -1,0 +1,36 @@
+description: >-
+  A README template moves the unit's own rendering of the previous version to
+  next; another unit's reference with the same shape is untouched.
+plugins:
+  - name: stub
+    units:
+      - { id: run, root: actions/run }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    actions/run:
+      versionFiles:
+        - { file: README.md, pattern: "abinnovision/actions@{id}-v{major}" }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        actions/run/i.ts: "0"
+        README.md: "uses: abinnovision/actions@run-v1\nuses: abinnovision/actions@other-v1\n"
+    - id: c1
+      message: "feat!: new inputs"
+      files: { actions/run/i.ts: "1" }
+  tags:
+    - { name: run-v1.4.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+expect:
+  paths: [README.md, actions/run/CHANGELOG.md]
+  files:
+    README.md: "uses: abinnovision/actions@run-v2\nuses: abinnovision/actions@other-v1\n"
+  fileWarnings: []

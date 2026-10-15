@@ -137,6 +137,8 @@ export interface VersionFile {
 
 export interface WriteCtx {
 	unit: Unit;
+	/** All units of the workspace. */
+	units: readonly Unit[];
 	/** Unit id to version in the current plan. */
 	versions: ReadonlyMap<string, string>;
 }

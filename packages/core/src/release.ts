@@ -1,7 +1,7 @@
 import { normalizeRoot } from "./discover.js";
 import { compare, maxLevel, uniqueSorted } from "./util.js";
 
-import type { ReleasePrMode, TallyConfig } from "./config.js";
+import type { ReleasePrMode, TallyConfig, VersionTemplate } from "./config.js";
 import type { Warning } from "./errors.js";
 import type {
 	AttributedChange,
@@ -336,6 +336,8 @@ export interface ReleaseSettings {
 	};
 	/** Floating tag formats. */
 	readonly floating: readonly string[];
+	/** Version file templates by unit id. */
+	readonly templates: ReadonlyMap<string, readonly VersionTemplate[]>;
 }
 
 /**
@@ -449,6 +451,15 @@ export const releaseSettings = (
 		),
 	},
 	floating: config.tags?.floating ?? [],
+	templates: new Map(
+		Object.entries(config.units ?? {}).flatMap(([root, overlay]) => {
+			const unit = units.find((u) => u.root === normalizeRoot(root));
+
+			return unit && overlay.versionFiles
+				? [[unit.id, overlay.versionFiles] as const]
+				: [];
+		}),
+	),
 });
 
 /**

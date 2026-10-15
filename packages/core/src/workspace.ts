@@ -12,7 +12,7 @@ import type { TallyConfig } from "./config.js";
 import type { Warning } from "./errors.js";
 import type { Graph, SourcedEdge } from "./graph.js";
 import type { Group } from "./groups.js";
-import type { IntentSource, Unit } from "./plugin.js";
+import type { IntentSource, Unit, VersionFile } from "./plugin.js";
 import type { ActivePlugin, PluginEnv } from "./plugins.js";
 import type { ReleaseSettings } from "./release.js";
 import type { SchemeEntry } from "./schemes.js";
@@ -68,6 +68,38 @@ const collectGlobalInputs = async (
 	return uniqueSorted(globs);
 };
 
+/**
+ * Plugin version files of released units with version source `file`, by unit
+ * id; hooks run on the first call only.
+ */
+const versionFilesOf = (
+	active: readonly ActivePlugin[],
+	units: readonly Unit[],
+): (() => Promise<ReadonlyMap<string, readonly VersionFile[]>>) => {
+	let files: Promise<Map<string, readonly VersionFile[]>> | undefined;
+	const collect = async () => {
+		const found = new Map<string, readonly VersionFile[]>();
+		for (const { plugin, ctx } of active) {
+			const hook = plugin.versionFiles?.bind(plugin);
+			for (const unit of units) {
+				if (!hook || unit.plugin !== plugin.name || unit.version !== "file") {
+					continue;
+				}
+
+				// eslint-disable-next-line no-await-in-loop -- hooks run sequentially in config order
+				const list = await runHook(plugin.name, "versionFiles", () =>
+					hook(ctx, unit),
+				);
+				found.set(unit.id, list);
+			}
+		}
+
+		return found;
+	};
+
+	return async () => await (files ??= collect());
+};
+
 /** An intent source with its plugin's validated options; callers build the `Ctx`. */
 export interface IntentEntry {
 	readonly plugin: string;
@@ -98,6 +130,10 @@ export interface Workspace {
 	readonly release: ReleaseSettings;
 	/** Fixed groups, sorted by name. */
 	readonly groups: readonly Group[];
+	/** Plugin version files of released units by unit id; runs the hooks once. */
+	readonly versionFiles: () => Promise<
+		ReadonlyMap<string, readonly VersionFile[]>
+	>;
 }
 
 /** Runs plugin hooks sequentially in config order and builds the graph. */
@@ -141,5 +177,6 @@ export const loadWorkspace = async (
 		intents,
 		release: releaseSettings(input.config, units),
 		groups,
+		versionFiles: versionFilesOf(active, units),
 	};
 };

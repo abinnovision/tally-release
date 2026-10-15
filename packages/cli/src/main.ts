@@ -8,6 +8,7 @@ import { explain } from "./commands/explain.js";
 import { graph } from "./commands/graph.js";
 import { plan } from "./commands/plan.js";
 import { shadow } from "./commands/shadow.js";
+import { applyVersions } from "./commands/version.js";
 import { painter } from "./output/paint.js";
 import { createSession } from "./session.js";
 import { version } from "./version.js";
@@ -17,6 +18,7 @@ import type { ExplainFlags } from "./commands/explain.js";
 import type { GraphFlags } from "./commands/graph.js";
 import type { PlanFlags } from "./commands/plan.js";
 import type { ShadowFlags } from "./commands/shadow.js";
+import type { VersionFlags } from "./commands/version.js";
 import type { Deps, GlobalOptions } from "./session.js";
 
 /** Runs the cli; returns the exit code (0 ok, 1 error, 2 usage). */
@@ -160,6 +162,17 @@ export const main = async (
 		.option("--strict", "exit 1 on unlabelled mismatches")
 		.action(async (flags: ShadowFlags) => {
 			await shadow(session(), flags);
+		});
+
+	program
+		.command("version")
+		.description(
+			"write version files and changelogs of pending releases to the working tree",
+		)
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--dry-run", "print the files without writing them")
+		.action(async (flags: VersionFlags) => {
+			await applyVersions(session(), flags);
 		});
 
 	try {

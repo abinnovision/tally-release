@@ -1,0 +1,30 @@
+description: >-
+  A template whose file does not exist fails when the files are written.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/a:
+      versionFiles: [{ file: docs/missing.md, pattern: "a@{version}" }]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/i.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/i.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+error:
+  code: E_VERSION_FILE_MISSING
+  details: { path: docs/missing.md, unit: a }

@@ -1,0 +1,22 @@
+description: >-
+  Version file templates: a file outside the repository is a config error.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/a:
+      versionFiles: [{ file: ../README.md, pattern: "a@{version}" }]
+git:
+  commits:
+    - id: c0
+      files: { packages/a/i.ts: "0" }
+base: null
+plan: { fails: true }
+expect:
+  planError:
+    code: E_CONFIG
+    details: { unit: a, file: ../README.md }

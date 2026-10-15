@@ -1,0 +1,44 @@
+description: >-
+  v1 does not match inside v10, v1.2 or after a letter; a {version} pattern
+  needs its literal part, so a bare version elsewhere is untouched.
+plugins:
+  - name: stub
+    units:
+      - { id: run, root: actions/run }
+      - { id: app, root: apps/app }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    actions/run:
+      versionFiles: [{ file: README.md, pattern: "{id}-v{major}" }]
+    apps/app:
+      versionFiles: [{ file: docs/app.md, pattern: "app@{version}" }]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        actions/run/i.ts: "0"
+        apps/app/i.ts: "0"
+        README.md: "run-v10 run-v1.2 xrun-v1 run-v1.\n"
+        docs/app.md: "1.4.0 and app@1.4.0 and app@1.4.0.1\n"
+    - id: c1
+      message: "feat!: run"
+      files: { actions/run/i.ts: "1" }
+    - id: c2
+      message: "feat: app"
+      files: { apps/app/i.ts: "1" }
+  tags:
+    - { name: run-v1.4.0, commit: c0 }
+    - { name: app-v1.4.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+expect:
+  files:
+    README.md: "run-v10 run-v1.2 xrun-v1 run-v2.\n"
+    docs/app.md: "1.4.0 and app@1.5.0 and app@1.4.0.1\n"
+  fileWarnings: []
