@@ -1,9 +1,16 @@
+import { renderMermaid } from "../render/mermaid.js";
+
 import type { Session } from "../session.js";
+
+export interface GraphFlags {
+	format?: "text" | "json" | "mermaid";
+	json?: boolean;
+}
 
 /** Prints units and edges. */
 export const graph = async (
 	session: Session,
-	flags: { json?: boolean },
+	flags: GraphFlags,
 ): Promise<void> => {
 	const workspace = await session.workspace();
 	session.warn(workspace.warnings);
@@ -21,7 +28,15 @@ export const graph = async (
 		reasons: e.reasons,
 	}));
 
-	if (flags.json) {
+	const format = flags.format ?? (flags.json ? "json" : "text");
+
+	if (format === "mermaid") {
+		session.stdout.write(renderMermaid(units, edges));
+
+		return;
+	}
+
+	if (format === "json") {
 		session.stdout.write(
 			`${JSON.stringify({ repo: workspace.repo, units, edges }, null, 2)}\n`,
 		);
