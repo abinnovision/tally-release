@@ -1,3 +1,4 @@
+import { TallyError } from "@tallyrelease/core";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,6 +8,30 @@ import { globSync } from "tinyglobby";
 import type { ReadonlyFs } from "@tallyrelease/core";
 
 const IGNORED = ["**/.git/**", "**/node_modules/**", "vendor/**"];
+
+const readError = (error: unknown, ref: string, path: string) => {
+	const stderr = (error as { stderr?: Buffer }).stderr?.toString("utf8");
+	const reason = stderr?.match(/^.+$/m)?.[0] ?? String(error);
+
+	return new TallyError(
+		"E_GIT_READ",
+		`cannot read "${path}" at ${ref}: ${reason}`,
+		{ ref, path },
+	);
+};
+
+/** Content of the blob `ref:path`; any git failure is `E_GIT_READ`. */
+const catBlob = (root: string, ref: string, path: string): string => {
+	try {
+		return execFileSync("git", ["cat-file", "blob", `${ref}:${path}`], {
+			cwd: root,
+			maxBuffer: 256 * 1024 * 1024,
+			stdio: ["ignore", "pipe", "pipe"],
+		}).toString("utf8");
+	} catch (error) {
+		throw readError(error, ref, path);
+	}
+};
 
 /** `ReadonlyFs` over the directory `root`. */
 export const nodeFs = (root: string): ReadonlyFs => ({
@@ -69,14 +94,7 @@ export const gitTreeFs = (root: string, sha: string): ReadonlyFs => {
 			}
 
 			if (!cache.has(path)) {
-				try {
-					cache.set(
-						path,
-						git(["cat-file", "blob", `${sha}:${path}`]).toString("utf8"),
-					);
-				} catch {
-					cache.set(path, undefined);
-				}
+				cache.set(path, catBlob(root, sha, path));
 			}
 
 			return cache.get(path);
@@ -90,19 +108,25 @@ export const gitTreeFs = (root: string, sha: string): ReadonlyFs => {
 	};
 };
 
-/** Content of `path` at commit `ref` in the repository at `root`, undefined when absent. */
+/**
+ * Content of `path` at commit `ref` in the repository at `root`, undefined when
+ * absent. Any other git failure throws `E_GIT_READ`.
+ */
 export const gitBlob = (
 	root: string,
 	ref: string,
 	path: string,
 ): string | undefined => {
+	let listing: string;
+
 	try {
-		return execFileSync("git", ["cat-file", "blob", `${ref}:${path}`], {
+		listing = execFileSync("git", ["ls-tree", "-z", ref, "--", path], {
 			cwd: root,
-			maxBuffer: 256 * 1024 * 1024,
-			stdio: ["ignore", "pipe", "ignore"],
+			stdio: ["ignore", "pipe", "pipe"],
 		}).toString("utf8");
-	} catch {
-		return undefined;
+	} catch (error) {
+		throw readError(error, ref, path);
 	}
+
+	return listing === "" ? undefined : catBlob(root, ref, path);
 };
