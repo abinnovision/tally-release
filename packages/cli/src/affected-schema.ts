@@ -19,6 +19,7 @@ export const affectedDocSchema = z.strictObject({
 			"pr-merge-base",
 			"merge-group",
 			"forge-last-success",
+			"local-merge-base",
 			"none",
 		]),
 		all: z.boolean(),

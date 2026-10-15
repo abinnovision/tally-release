@@ -5,6 +5,7 @@ import { inspect } from "node:util";
 import { affected } from "./commands/affected.js";
 import { check } from "./commands/check.js";
 import { graph } from "./commands/graph.js";
+import { painter } from "./output/paint.js";
 import { createSession } from "./session.js";
 import { version } from "./version.js";
 
@@ -59,10 +60,21 @@ export const main = async (
 		.command("affected")
 		.description("compute the build set")
 		.option("--base <ref>", "diff against this ref")
-		.option("--json", "print the affected document")
+		.option("--json", "print the affected document (same as --format json)")
+		.addOption(
+			new Option("--format <format>", "output format").choices([
+				"text",
+				"json",
+				"tsv",
+			]),
+		)
 		.option("--out <file>", "write the affected document to a file")
 		.option("--github-output", "append outputs to $GITHUB_OUTPUT")
-		.action(async (flags: AffectedFlags) => {
+		.action(async (flags: AffectedFlags, cmd: Command) => {
+			if (flags.json && flags.format !== undefined) {
+				cmd.error("--json and --format cannot be combined", { exitCode: 2 });
+			}
+
 			await affected(session(), flags);
 		});
 
@@ -75,11 +87,14 @@ export const main = async (
 			return error.exitCode === 0 ? 0 : 2;
 		}
 
+		const paint = painter(deps.stderr);
 		if (error instanceof TallyError) {
-			deps.stderr.write(`${error.code}: ${error.message}\n`);
+			deps.stderr.write(
+				`${paint("red", `error[${error.code}]`)}: ${error.message}\n`,
+			);
 		} else {
 			deps.stderr.write(
-				`E_INTERNAL: ${error instanceof Error ? error.message : String(error)}\n`,
+				`${paint("red", "error[E_INTERNAL]")}: ${error instanceof Error ? error.message : String(error)}\n`,
 			);
 			if (program.opts<GlobalOptions>().verbose) {
 				deps.stderr.write(`${inspect(error)}\n`);

@@ -1,11 +1,32 @@
 import { TallyError } from "@tallyrelease/core";
 
-import type { GithubContext } from "./github-env.js";
+import type { Env, GithubContext } from "./github-env.js";
 import type { Forge } from "../forge/forge.js";
 import type { RepoGit } from "../git/reader.js";
 import type { BaseSource, Warning } from "@tallyrelease/core";
 
 const ZERO_SHA = /^0+$/;
+
+const CI_VARS = [
+	"JENKINS_URL",
+	"TF_BUILD",
+	"CODEBUILD_BUILD_ID",
+	"BUILDKITE",
+	"GITLAB_CI",
+	"TEAMCITY_VERSION",
+	"BITBUCKET_BUILD_NUMBER",
+];
+
+const DEFAULT_REFS = ["origin/main", "origin/master", "main", "master"];
+
+const isCi = (env: Env): boolean => {
+	const ci = env["CI"];
+
+	return (
+		(ci !== undefined && !["", "false", "0"].includes(ci)) ||
+		CI_VARS.some((name) => env[name] !== undefined)
+	);
+};
 
 const str = (value: unknown): string | undefined =>
 	typeof value === "string" && value !== "" ? value : undefined;
@@ -44,11 +65,14 @@ const noLastSuccess: Warning = {
 export interface BuildBase {
 	base: string | null;
 	source: BaseSource;
+	/** The `--base` value, or the branch of a local merge base. */
+	ref?: string;
 	warnings: Warning[];
 }
 
 export interface BuildBaseInput {
 	git: RepoGit;
+	env: Env;
 	/** Resolved HEAD sha. */
 	head: string;
 	/** `--base`. */
@@ -58,7 +82,7 @@ export interface BuildBaseInput {
 	forge?: Forge | undefined;
 }
 
-/** Resolves the build base from `--base`, the CI event, then the forge. */
+/** Resolves the build base from `--base`, the CI event, the forge, then the local default branch. */
 export const resolveBuildBase = async (
 	input: BuildBaseInput,
 ): Promise<BuildBase> => {
@@ -149,8 +173,35 @@ export const resolveBuildBase = async (
 			: result(null, "none", last);
 	};
 
+	/** First of `origin/HEAD` and the common default branch names that resolves. */
+	const defaultRef = async () => {
+		const candidates = [await git.defaultBranch(), ...DEFAULT_REFS];
+		for (const candidate of candidates) {
+			if (
+				candidate !== undefined &&
+				(await git.resolve(candidate)) !== undefined
+			) {
+				return candidate;
+			}
+		}
+
+		return undefined;
+	};
+
 	if (input.cliBase !== undefined) {
-		return result(await required(input.cliBase, "--base"), "cli");
+		return {
+			...result(await required(input.cliBase, "--base"), "cli"),
+			ref: input.cliBase,
+		};
+	}
+
+	if (github === undefined && !isCi(input.env)) {
+		const ref = await defaultRef();
+		const base = ref === undefined ? undefined : await git.mergeBase(head, ref);
+
+		return ref === undefined || base === undefined
+			? result(null, "none")
+			: { ...result(base, "local-merge-base"), ref };
 	}
 
 	switch (github?.eventName) {

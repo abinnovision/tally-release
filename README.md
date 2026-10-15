@@ -17,7 +17,24 @@ Configuration lives in `tallyrelease.yaml`. Units are build-only unless opted in
 
 ## Usage
 
+```text
+$ tallyrelease affected
+base  4f2a91c (merge base with origin/main)
+
+direct (1)
+  db          packages/db
+dependent (3)
+  api-server  apps/api-server  via db          released
+  scripts     scripts          via api-server
+  tests       tests            via api-server
+
+4 of 10 units affected, 2 files outside any unit
+```
+
+Outside CI, `affected` diffs against the merge base with the default branch (`origin/HEAD`, else `main` or `master`), so it shows what the current branch changed. On GitHub Actions it uses the event and the forge; other CI builds everything unless `--base` is given. For scripts, use `--format tsv` or `--json`; the text layout may change between versions.
+
 ````sh
+tallyrelease affected --format tsv
 tallyrelease graph --format mermaid
 { echo '```mermaid'; tallyrelease graph --format mermaid; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 ````

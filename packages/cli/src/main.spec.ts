@@ -46,11 +46,16 @@ describe("main", () => {
 		const fs = memoryFs({ "tallyrelease.yaml": "plugins: {}\n" });
 
 		const quiet = await run(["affected"], { git, fs });
-		expect(quiet).toMatchObject({ code: 1, stderr: "E_INTERNAL: boom\n" });
+		expect(quiet).toMatchObject({
+			code: 1,
+			stderr: "error[E_INTERNAL]: boom\n",
+		});
 
 		const verbose = await run(["--verbose", "affected"], { git, fs });
 		expect(verbose.code).toBe(1);
-		expect(verbose.stderr).toMatch(/^E_INTERNAL: boom\nError: boom\n\s+at /);
+		expect(verbose.stderr).toMatch(
+			/^error\[E_INTERNAL\]: boom\nError: boom\n\s+at /,
+		);
 		expect(verbose.stderr).toContain("[cause]: Error: root cause");
 	});
 });

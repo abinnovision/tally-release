@@ -98,11 +98,19 @@ describe("e2e", () => {
 		expect(await affectedAt(dir, sha("c0"))).toEqual([[".", "global"]]);
 
 		const check = await runCli(["graph"], { cwd: dir });
-		expect(check.stdout).toBe("php-app\t.\tphp\tnone\n");
+		expect(check.stdout).toBe(
+			[
+				"UNIT     PATH  PLUGIN  RELEASE",
+				"php-app  .     php     -",
+				"",
+				"1 unit (0 released), 0 edges",
+				"",
+			].join("\n"),
+		);
 
 		git(dir, "remote", "add", "origin", "git@github.com:acme/widgets.git");
 		const named = await runCli(["graph"], { cwd: dir });
-		expect(named.stdout).toBe("widgets\t.\tphp\tnone\n");
+		expect(named.stdout).toContain("\nwidgets  .     php     -\n");
 	});
 
 	it("rejects --cwd below the repository root", async () => {
@@ -117,6 +125,6 @@ describe("e2e", () => {
 
 		const result = await runCli(["check", "--cwd", "sub"], { cwd: dir });
 		expect(result.code).toBe(1);
-		expect(result.stderr).toMatch(/^E_NOT_REPO_ROOT: /);
+		expect(result.stderr).toMatch(/^error\[E_NOT_REPO_ROOT\]: /);
 	});
 });

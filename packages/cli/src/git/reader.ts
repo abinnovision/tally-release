@@ -23,6 +23,8 @@ export interface RepoGit extends GitReader {
 	isShallow: () => MaybePromise<boolean>;
 	/** Current branch, undefined when detached. */
 	branch: () => MaybePromise<string | undefined>;
+	/** Target of `origin/HEAD`, for example `origin/main`; undefined if unset. */
+	defaultBranch: () => MaybePromise<string | undefined>;
 }
 
 /** `RepoGit` backed by the `git` executable in `cwd`. */
@@ -175,6 +177,15 @@ export const gitReader = (
 			const result = await run(
 				cwd,
 				["symbolic-ref", "--quiet", "--short", "HEAD"],
+				debug,
+			);
+
+			return result.code === 0 ? result.stdout.trim() : undefined;
+		},
+		defaultBranch: async () => {
+			const result = await run(
+				cwd,
+				["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
 				debug,
 			);
 
