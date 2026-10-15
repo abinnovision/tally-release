@@ -7,11 +7,15 @@ import { painter } from "../output/paint.js";
 
 import type { PlanFlags } from "./plan.js";
 import type { Session } from "../session.js";
-import type { UnitPlan } from "@tallyrelease/core";
+import type { UnitExplanation, UnitPlan } from "@tallyrelease/core";
 
 const short = (sha: string | undefined) => sha?.slice(0, 7) ?? "-";
 
-const releaseLine = (u: UnitPlan | null, released: boolean): string => {
+const releaseLine = (
+	u: UnitPlan | null,
+	released: boolean,
+	{ group, nextSource }: Pick<UnitExplanation, "group" | "nextSource">,
+): string => {
 	if (!released) {
 		return "not released";
 	}
@@ -20,7 +24,12 @@ const releaseLine = (u: UnitPlan | null, released: boolean): string => {
 		return "nothing pending";
 	}
 
-	const why = u.releaseAs === null ? (u.bump ?? "") : "release-as";
+	const why =
+		group !== null && nextSource !== "bump"
+			? `group ${group.name}, ${nextSource ?? ""}`
+			: group === null && u.releaseAs !== null
+				? "release-as"
+				: (u.bump ?? "");
 
 	return `${u.from ?? "first release"} -> ${u.next} (${why})${u.version === null ? "" : `, version ${u.version}`}`;
 };
@@ -50,17 +59,23 @@ export const explain = async (
 	const paint = painter(session.stdout);
 	const plan = explanation.unit;
 	const affected = plan?.affected;
+	const { group } = explanation;
 	const lines = [
 		`${paint("bold", id)}  ${paint("dim", `${unit?.root ?? ""}  ${unit?.plugin ?? ""}  ${unit?.scheme ?? ""}`)}`,
 		baseLine(paint, base),
 		"",
 		`${paint("bold", "affected")}  ${
 			affected
-				? `${affected.reason}${affected.via.length > 0 ? ` via ${affected.via.join(", ")}` : ""}`
+				? `${affected.reason === "group" ? `pulled by group ${group?.name ?? ""}` : affected.reason}${affected.via.length > 0 ? ` via ${affected.via.join(", ")}` : ""}`
 				: "no"
 		}`,
 		...explanation.files.map((f) => `  ${f}`),
-		`${paint("bold", "release")}   ${releaseLine(explanation.unit, unit?.version !== "none")}`,
+		...(group
+			? [
+					`${paint("bold", "group")}     ${group.name} ${paint("dim", `(${group.members.join(", ")})`)}`,
+				]
+			: []),
+		`${paint("bold", "release")}   ${releaseLine(explanation.unit, unit?.version !== "none", explanation)}`,
 	];
 	if (plan?.baseTag) {
 		lines.push(

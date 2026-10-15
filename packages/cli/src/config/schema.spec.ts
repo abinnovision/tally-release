@@ -10,11 +10,11 @@ const read = (path: string) =>
 
 const validate = new Ajv({ strict: false }).compile(configJsonSchema());
 
-// Examples from design.md A.10 without v0.3 keys and groups.
+// Examples from design.md A.10 without v0.3 keys.
 const examples = [
 	...read("../../../../docs/design.md").matchAll(/```yaml\n([\s\S]*?)```/g),
 ]
-	.map((m) => m[1]!.split("# v0.3")[0]!.replace(/^groups:\n(?: .*\n)*/m, ""))
+	.map((m) => m[1]!.split("# v0.3")[0]!)
 	.filter((y) => y.startsWith("# "));
 
 describe("configJsonSchema", () => {
@@ -49,6 +49,19 @@ describe("configJsonSchema", () => {
 		).toBe(true);
 		expect(validate({ branches: [{ name: "main" }] })).toBe(false);
 		expect(validate({ bumps: { types: { feat: "none" } } })).toBe(false);
+	});
+
+	it("accepts groups by units or tags", () => {
+		expect(
+			validate({
+				groups: { sdk: { units: ["a"] }, apps: { tags: ["docker"] } },
+			}),
+		).toBe(true);
+		expect(validate({ groups: { "a b": { units: ["a"] } } })).toBe(false);
+		expect(validate({ groups: { sdk: { mode: "linked" } } })).toBe(false);
+		expect(validate({ groups: { sdk: {} } })).toBe(false);
+		expect(validate({ groups: {} })).toBe(false);
+		expect(validate({ groups: { sdk: { units: ["a b"] } } })).toBe(false);
 	});
 
 	it("rejects version none and unknown keys", () => {

@@ -1,0 +1,37 @@
+description: >-
+  A qualified Release-As on one member of a group at 1.4.0 with a pending
+  patch sets the group version.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: b"
+      files: { packages/b/index.ts: "1" }
+    - id: c2
+      message: "chore: a\n\nRelease-As: a@2.0.0"
+      files: { packages/a/index.ts: "2" }
+  tags:
+    - { name: a-v1.4.0, commit: c0 }
+    - { name: b-v1.4.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, bump: patch, releaseAs: 2.0.0, next: 2.0.0 }
+      - { id: b, bump: patch, releaseAs: null, next: 2.0.0 }
+    groups: [{ name: sdk, bump: patch, next: 2.0.0 }]
+    warnings: []

@@ -1,0 +1,46 @@
+description: >-
+  A unit at 0.3.0 joining a group at 1.4.0 releases with the group; member
+  ranges start at the group base tag.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: x, root: packages/x }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, x] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/x/index.ts: "0" }
+    - id: c1
+      message: "feat: x before the group base"
+      files: { packages/x/index.ts: "1" }
+    - id: c2
+      message: "chore: release a"
+      files: { packages/a/index.ts: "2" }
+    - id: c3
+      message: "fix: x"
+      files: { packages/x/index.ts: "3" }
+  tags:
+    - { name: x-v0.3.0, commit: c0 }
+    - { name: a-v1.4.0, commit: c2 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, from: 1.4.0, bump: patch, next: 1.4.1, changes: [] }
+      - id: x
+        baseTag: x-v0.3.0
+        from: 0.3.0
+        bump: patch
+        next: 1.4.1
+        changes: [{ sha: c3 }]
+    groups:
+      - { name: sdk, baseTag: a-v1.4.0, from: 1.4.0, bump: patch, next: 1.4.1 }
+    warnings: []

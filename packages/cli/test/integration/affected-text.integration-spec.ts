@@ -4,6 +4,7 @@ import { fakeForge } from "./harness/fake-forge.js";
 import { removeTmpDirs } from "./harness/git-repo.js";
 import { memoryRepo } from "./harness/memory-repo.js";
 import { actionsEnv, runCli } from "./harness/run-cli.js";
+import { affectedDocSchema } from "../../src/affected-schema.js";
 
 import type { RunOptions } from "./harness/run-cli.js";
 import type { Dag } from "@tallyrelease/core/testing";
@@ -146,5 +147,68 @@ describe("affected text and tsv (G28)", () => {
 		const conflict = await affected(["--json", "--format", "tsv"]);
 		expect(conflict.code).toBe(2);
 		expect(conflict.stderr).toContain("cannot be combined");
+	});
+});
+
+describe("affected with groups (G34)", () => {
+	const grouped: Dag = {
+		commits: [
+			{
+				id: "p0",
+				files: {
+					"tallyrelease.yaml": [
+						"units:",
+						"  apps/web: { id: web, release: true, tags: [docker] }",
+						"  apps/api: { id: api, release: true }",
+						"groups:",
+						"  apps: { units: [web, api] }",
+					].join("\n"),
+					"apps/web/a.ts": "0",
+					"apps/api/a.ts": "0",
+				},
+			},
+			{ id: "p1", files: { "apps/web/a.ts": "1" } },
+		],
+	};
+	const run = (args: string[]) =>
+		runCli(["affected", "--base", "p0", ...args], memoryRepo(grouped));
+
+	it("reports group mates with reason group", async () => {
+		const json = await run(["--json"]);
+		const doc = affectedDocSchema.parse(JSON.parse(json.stdout));
+		expect(doc.units.map((u) => [u.id, u.reason, u.via])).toEqual([
+			["api", "group", ["web"]],
+			["web", "direct", []],
+		]);
+
+		expect((await run(["--format", "tsv"])).stdout).toBe(
+			[
+				"id\tpath\treason\tvia\treleased\ttags",
+				"api\tapps/api\tgroup\tweb\ttrue\t",
+				"web\tapps/web\tdirect\t\ttrue\tdocker",
+				"",
+			].join("\n"),
+		);
+
+		expect((await run([])).stdout).toBe(
+			[
+				"base  p0 (--base p0)",
+				"",
+				"direct (1)",
+				"  web  apps/web           released",
+				"group (1)",
+				"  api  apps/api  via web  released",
+				"",
+				"2 of 2 units affected",
+				"",
+			].join("\n"),
+		);
+	});
+
+	it("drops an untagged mate with --tag", async () => {
+		const doc = affectedDocSchema.parse(
+			JSON.parse((await run(["--json", "--tag", "docker"])).stdout),
+		);
+		expect(doc.units.map((u) => u.id)).toEqual(["web"]);
 	});
 });

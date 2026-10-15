@@ -23,9 +23,15 @@ export type {
 	ReleasedUnit,
 	UnitPlan,
 } from "./plan.js";
-export type { DepConfig, TallyConfig, UnitOverlay } from "./config.js";
+export type {
+	DepConfig,
+	GroupConfig,
+	TallyConfig,
+	UnitOverlay,
+} from "./config.js";
 export type { Warning } from "./errors.js";
 export type { Graph, SourcedEdge } from "./graph.js";
+export type { Group } from "./groups.js";
 export type {
 	BumpLevel,
 	Change,

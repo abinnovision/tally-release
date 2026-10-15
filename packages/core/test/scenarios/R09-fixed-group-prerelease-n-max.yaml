@@ -1,0 +1,66 @@
+description: >-
+  The group prerelease counter counts from the group line base (the highest
+  member tag on the first-parent chain), not from an older member tag; the
+  group base tag starts the range of a member whose own tag is older.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a before the group base"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore: release b"
+      files: { packages/b/index.ts: "2" }
+    - id: c3
+      message: "fix: a"
+      files: { packages/a/index.ts: "3" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.1.0, commit: c2 }
+base: c2
+plan: {}
+expect:
+  facts:
+    groups:
+      - name: sdk
+        members: [a, b]
+        baseTag: { name: b-v1.1.0 }
+        lineBaseTag: { name: b-v1.1.0 }
+        sinceLineBase: 1
+    units:
+      - { id: a, from: c2, sinceLineBase: 3 }
+      - { id: b, from: c2, sinceLineBase: 1 }
+  plan:
+    units:
+      - id: a
+        affected: { reason: direct, via: [] }
+        baseTag: a-v1.0.0
+        from: 1.0.0
+        bump: patch
+        next: 1.1.1
+        version: 1.1.1-beta.1
+        changes: [{ sha: c3 }]
+      - id: b
+        affected: { reason: group, via: [a] }
+        baseTag: b-v1.1.0
+        from: 1.1.0
+        bump: patch
+        next: 1.1.1
+        version: 1.1.1-beta.1
+        changes: []
+    groups:
+      - { name: sdk, baseTag: b-v1.1.0, from: 1.1.0, next: 1.1.1 }
+    warnings: []

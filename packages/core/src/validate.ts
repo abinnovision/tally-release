@@ -10,8 +10,8 @@ import type { Workspace } from "./workspace.js";
 
 /**
  * Release-only checks, never run by `affected`: scheme registry, schemes, tag
- * formats and initial versions of released units, branch rules and channels.
- * Returns the scheme registry.
+ * formats and initial versions of released units, group members, branch rules
+ * and channels. Returns the scheme registry.
  */
 export const validateRelease = (
 	workspace: Workspace,
@@ -40,6 +40,29 @@ export const validateRelease = (
 				"E_INITIAL_VERSION",
 				`initial version "${unit.initialVersion}" of unit "${unit.id}" is not a ${unit.scheme} version`,
 				{ unit: unit.id, version: unit.initialVersion },
+			);
+		}
+	}
+
+	const units = new Map(workspace.units.map((u) => [u.id, u]));
+	for (const { name, members } of workspace.groups) {
+		const unreleased = members.find((id) => units.get(id)?.version === "none");
+		if (unreleased !== undefined) {
+			throw new TallyError(
+				"E_GROUP_NOT_RELEASED",
+				`group "${name}" names unit "${unreleased}", which is not released`,
+				{ group: name, unit: unreleased },
+			);
+		}
+
+		const schemeNames = uniqueSorted(
+			members.map((id) => units.get(id)?.scheme ?? ""),
+		);
+		if (schemeNames.length > 1) {
+			throw new TallyError(
+				"E_GROUP_SCHEME",
+				`members of group "${name}" use different schemes: ${schemeNames.join(", ")}`,
+				{ group: name, schemes: schemeNames },
 			);
 		}
 	}

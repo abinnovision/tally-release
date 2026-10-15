@@ -157,6 +157,25 @@ describe("compareShadow", () => {
 		]);
 	});
 
+	it("matches group members where release-please linked-versions agrees", () => {
+		expect(
+			compare({
+				before: { "packages/a": "1.0.0", "packages/b": "0.3.0" },
+				after: { "packages/a": "1.1.0", "packages/b": "1.1.0" },
+				plan: {
+					units: [
+						planned("a", "1.1.0", { from: "1.0.0", group: "sdk" }),
+						planned("b", "1.1.0", { from: "0.3.0", group: "sdk" }),
+					],
+				},
+				units: [unit("a"), unit("b")],
+			}),
+		).toEqual([
+			["packages/a", "match", ""],
+			["packages/b", "match", ""],
+		]);
+	});
+
 	it("leaves differences the labels do not explain unlabelled", () => {
 		expect(
 			compare({

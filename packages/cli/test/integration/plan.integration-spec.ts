@@ -248,6 +248,55 @@ describe("explain", () => {
 			'warning[W_RELEASE_AS_INVALID]: unit "a": Release-As "0.5.0" in c2',
 		);
 
+		const groupedDag: Dag = {
+			commits: [
+				{
+					id: "c0",
+					files: {
+						"tallyrelease.yaml": [
+							"units:",
+							"  a: { release: true }",
+							"  b: { release: true }",
+							"groups:",
+							"  sdk: { units: [a, b] }",
+						].join("\n"),
+						"a/x": "0",
+						"b/x": "0",
+					},
+				},
+				{ id: "c1", message: "fix: a", files: { "a/x": "1" } },
+			],
+			tags: [
+				{ name: "a-v1.0.0", commit: "c0" },
+				{ name: "b-v1.0.0", commit: "c0" },
+			],
+		};
+		const grouped = memoryRepo(groupedDag);
+		const pulled = await runCli(["explain", "b", "--base", "c0"], grouped);
+		expect(pulled.stdout).toContain(
+			"affected  pulled by group sdk via a\ngroup     sdk (a, b)\nrelease   1.0.0 -> 1.0.1 (patch)\n",
+		);
+		const table = await runCli(["plan", "--base", "c0"], grouped);
+		expect(table.stdout).toContain("UNIT  GROUP  KIND");
+
+		const raised = await runCli(
+			["explain", "b", "--base", "c0"],
+			memoryRepo({
+				...groupedDag,
+				commits: [
+					...groupedDag.commits,
+					{
+						id: "c2",
+						message: "chore: a\n\nRelease-As: a@2.0.0",
+						files: { "a/x": "2" },
+					},
+				],
+			}),
+		);
+		expect(raised.stdout).toContain(
+			"release   1.0.0 -> 2.0.0 (group sdk, release-as)\n",
+		);
+
 		const unknown = await run(["explain", "nope"]);
 		expect(unknown.code).toBe(1);
 		expect(unknown.stderr).toBe('error[E_UNIT_UNKNOWN]: unknown unit "nope"\n');

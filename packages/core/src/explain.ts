@@ -27,6 +27,10 @@ export interface UnitExplanation {
 	plan: Plan;
 	/** Plan entry; null when the unit is neither affected nor pending. */
 	unit: UnitPlan | null;
+	/** The unit's fixed group. */
+	group: { name: string; members: string[] } | null;
+	/** What set `unit.next`: the bump, the initial version or a Release-As value. */
+	nextSource: "bump" | "initial" | "release-as" | null;
 	/** Changed unit files (reason `direct`) or changed global inputs (`global`). */
 	files: string[];
 	/** Plan changes with their files, core commit order. */
@@ -114,9 +118,13 @@ export const explainUnit = async (
 		(f) => winner && f.sha === winner.sha && f.version === winner.raw,
 	);
 
+	const group = workspace.groups.find((g) => g.members.includes(id));
+
 	return {
 		plan,
 		unit,
+		group: group ? { name: group.name, members: [...group.members] } : null,
+		nextSource: releases.get(id)?.nextSource ?? null,
 		files,
 		changes,
 		propagatedFrom,

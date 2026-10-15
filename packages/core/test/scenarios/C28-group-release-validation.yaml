@@ -1,0 +1,31 @@
+description: >-
+  A group naming an unreleased unit fails release validation, while affected
+  still succeeds on the same config.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+base: c0
+plan: { fails: true }
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct, via: [] }
+      - { id: b, reason: group, via: [a] }
+  planError:
+    code: E_GROUP_NOT_RELEASED
+    details: { group: sdk, unit: b }

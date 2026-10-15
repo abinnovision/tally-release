@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { AffectedDoc } from "@tallyrelease/core";
 
-const reason = z.enum(["direct", "dependent", "global", "all"]);
+const reason = z.enum(["direct", "dependent", "global", "all", "group"]);
 
 /** Schema of `tallyrelease affected --json`, published as `affected.schema.json`. */
 export const affectedDocSchema = z.strictObject({

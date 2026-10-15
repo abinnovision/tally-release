@@ -51,6 +51,8 @@ export interface Pending {
 	readonly bump: BumpLevel | null;
 	/** Has a bump or a Release-As value. */
 	readonly pending: boolean;
+	/** Fixed group name. */
+	readonly group?: string;
 }
 
 export interface Propagated extends Pending {
@@ -59,10 +61,11 @@ export interface Propagated extends Pending {
 }
 
 /**
- * Propagation fixpoint over released units in graph order. For a pending
- * `from`, the dependent's policy (`auto` = pinned ? patch : rebuild) decides:
- * `patch` raises it to at least patch, `rebuild` changes nothing. Terminates
- * because bumps only increase.
+ * Propagation and group fixpoint over released units in graph order. For a
+ * pending `from`, the dependent's policy (`auto` = pinned ? patch : rebuild)
+ * decides: `patch` raises it to at least patch, `rebuild` changes nothing. A
+ * group with a pending member makes every member pending at the members' max
+ * bump. Terminates because bumps only increase.
  */
 export const propagate = (
 	graph: Pick<Graph, "edges" | "order">,
@@ -70,6 +73,13 @@ export const propagate = (
 	states: ReadonlyMap<string, Pending>,
 ): Map<string, Propagated> => {
 	const policies = new Map(units.map((u) => [u.id, u.propagate]));
+	const groups = new Map<string, string[]>();
+	for (const [id, { group }] of states) {
+		if (group !== undefined) {
+			groups.set(group, [...(groups.get(group) ?? []), id]);
+		}
+	}
+
 	const edges = releasedEdges(graph.edges, new Set(states.keys()));
 	const result = new Map<
 		string,
@@ -102,6 +112,25 @@ export const propagate = (
 				state.bump = maxLevel(state.bump, "patch");
 				state.pending = true;
 				changed = true;
+			}
+		}
+
+		for (const members of groups.values()) {
+			const raised = members.flatMap((id) => result.get(id) ?? []);
+			if (!raised.some((s) => s.pending)) {
+				continue;
+			}
+
+			const bump = raised.reduce<BumpLevel | null>(
+				(level, s) => maxLevel(level, s.bump),
+				null,
+			);
+			for (const s of raised) {
+				if (!s.pending || s.bump !== bump) {
+					s.pending = true;
+					s.bump = bump;
+					changed = true;
+				}
 			}
 		}
 	}

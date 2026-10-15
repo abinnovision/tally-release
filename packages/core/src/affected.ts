@@ -14,7 +14,8 @@ export type BaseSource =
 	| "local-merge-base"
 	| "none";
 
-export type AffectedReason = "direct" | "dependent" | "global" | "all";
+export type AffectedReason =
+	"direct" | "dependent" | "global" | "all" | "group";
 
 export interface AffectedUnit {
 	id: string;
@@ -22,7 +23,7 @@ export interface AffectedUnit {
 	path: string;
 	plugin: string;
 	reason: AffectedReason;
-	/** Affected direct dependencies that made a dependent affected. */
+	/** Affected direct dependencies of a dependent, or affected mates of a group member. */
 	via: string[];
 	/** True unless the unit's version is `none`. */
 	released: boolean;
@@ -133,28 +134,45 @@ export const computeAffected = async (
 		);
 	}
 
+	const mates = new Map(
+		workspace.groups.flatMap((g) =>
+			g.members.map((id) => [id, g.members.filter((m) => m !== id)]),
+		),
+	);
 	const affected = new Set(direct);
 	const queue = [...direct];
 	for (const id of queue) {
-		for (const dependent of graph.dependents.get(id) ?? []) {
-			if (!affected.has(dependent)) {
-				affected.add(dependent);
-				queue.push(dependent);
+		for (const next of [
+			...(graph.dependents.get(id) ?? []),
+			...(mates.get(id) ?? []),
+		]) {
+			if (!affected.has(next)) {
+				affected.add(next);
+				queue.push(next);
 			}
 		}
 	}
 
+	// Precedence: direct, then dependent, then group.
 	const result = units
 		.filter((u) => affected.has(u.id))
-		.map((u) =>
-			direct.has(u.id)
-				? entry(u, "direct", [])
+		.map((u) => {
+			if (direct.has(u.id)) {
+				return entry(u, "direct", []);
+			}
+
+			const deps = (graph.dependencies.get(u.id) ?? []).filter((d) =>
+				affected.has(d),
+			);
+
+			return deps.length > 0
+				? entry(u, "dependent", deps)
 				: entry(
 						u,
-						"dependent",
-						(graph.dependencies.get(u.id) ?? []).filter((d) => affected.has(d)),
-					),
-		);
+						"group",
+						(mates.get(u.id) ?? []).filter((m) => affected.has(m)),
+					);
+		});
 
 	return doc(
 		result,
