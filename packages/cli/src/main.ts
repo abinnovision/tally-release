@@ -107,9 +107,24 @@ export const main = async (
 		)
 		.option("--out <file>", "write the plan to a file")
 		.option("--github-output", "append outputs to $GITHUB_OUTPUT")
+		.option(
+			"--summary",
+			"write markdown to $GITHUB_STEP_SUMMARY, else print it instead of the table",
+		)
 		.action(async (flags: PlanFlags, cmd: Command) => {
 			if (flags.json && flags.format !== undefined) {
 				cmd.error("--json and --format cannot be combined", { exitCode: 2 });
+			}
+
+			if (
+				flags.summary &&
+				(flags.json || flags.format === "json") &&
+				!deps.env["GITHUB_STEP_SUMMARY"]
+			) {
+				cmd.error(
+					"--summary needs GITHUB_STEP_SUMMARY when printing JSON; both use stdout",
+					{ exitCode: 2 },
+				);
 			}
 
 			await plan(session(), flags);

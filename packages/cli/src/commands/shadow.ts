@@ -1,7 +1,8 @@
 import { computePlan, TallyError } from "@tallyrelease/core";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { appendStepSummary } from "../ci/summary.js";
 import { alignColumns } from "../output/columns.js";
 import { count } from "../output/count.js";
 import { branchName } from "../session.js";
@@ -211,13 +212,9 @@ const writeReport = (
 		);
 	}
 
-	const stepSummary = env["GITHUB_STEP_SUMMARY"];
-	if (flags.summary && stepSummary) {
-		appendFileSync(stepSummary, markdown(report));
-	}
-
+	const appended = flags.summary && appendStepSummary(env, markdown(report));
 	session.stdout.write(
-		flags.summary && !stepSummary ? markdown(report) : text(report),
+		flags.summary && !appended ? markdown(report) : text(report),
 	);
 
 	if (env["GITHUB_ACTIONS"] === "true") {
