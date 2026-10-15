@@ -120,7 +120,8 @@ const pickReleaseAs = <V>(
 /**
  * Max level over the changes. While the major is 0, breaking changes use
  * `preMajor.breaking` and changes whose type level is minor `preMajor.feat`.
- * Absorbed changes are capped at minor.
+ * An absorbed change contributes `bumps.absorbed` when its own level is set
+ * (`minor` caps it at minor).
  */
 const ownBump = (
 	changes: readonly UnitChange[],
@@ -137,9 +138,13 @@ const ownBump = (
 				? settings.preMajor.feat
 				: typed;
 
+		if (via === undefined || level === null) {
+			return maxLevel(bump, level);
+		}
+
 		return maxLevel(
 			bump,
-			via !== undefined && level === "major" ? "minor" : level,
+			settings.absorbed === "minor" && level !== "patch" ? "minor" : "patch",
 		);
 	}, null);
 
@@ -233,6 +238,8 @@ export interface ReleaseSettings {
 	readonly bumps: ReadonlyMap<string, BumpLevel>;
 	/** Levels used while `core(from).major == 0`. */
 	readonly preMajor: { readonly breaking: BumpLevel; readonly feat: BumpLevel };
+	/** Level cap of absorbed changes with a bump. */
+	readonly absorbed: "patch" | "minor";
 	/** In config order. */
 	readonly branches: readonly BranchRule[];
 }
@@ -313,6 +320,7 @@ export const reach = (
 /** Applies the defaults to `bumps` and `branches`. */
 export const releaseSettings = (config: TallyConfig): ReleaseSettings => ({
 	bumps: new Map(Object.entries({ ...DEFAULT_TYPES, ...config.bumps?.types })),
+	absorbed: config.bumps?.absorbed ?? "patch",
 	preMajor: {
 		breaking: config.bumps?.preMajor?.breaking ?? "minor",
 		feat: config.bumps?.preMajor?.feat ?? "minor",

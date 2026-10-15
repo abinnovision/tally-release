@@ -174,6 +174,13 @@ export const configSchema = z.strictObject({
 						"Bump levels for breaking changes and feat while the major version is 0. Default minor for both.",
 				})
 				.exactOptional(),
+			absorbed: z
+				.enum(["patch", "minor"])
+				.meta({
+					description:
+						"Level a released unit gets from bump-producing changes absorbed from unreleased dependencies: patch (default) or minor (feat and breaking give minor, fix gives patch).",
+				})
+				.exactOptional(),
 		})
 		.meta({ description: "How commits map to bump levels." })
 		.exactOptional(),

@@ -38,7 +38,7 @@ const explain = async (unit: string) => {
 describe("explainUnit", () => {
 	it("lists absorbed changes with their files", async () => {
 		const result = await explain("app");
-		expect(result.unit).toMatchObject({ next: "1.1.0" });
+		expect(result.unit).toMatchObject({ next: "1.0.1" });
 		expect(result.changes).toMatchObject([
 			{ sha: "c1", via: "lib", files: ["lib/x"] },
 		]);
