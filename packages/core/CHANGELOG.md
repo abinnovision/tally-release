@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/abinnovision/tally-release/compare/core-v0.1.0...core-v0.1.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* add unit tags and an affected --tag filter ([#14](https://github.com/abinnovision/tally-release/issues/14)) ([733e556](https://github.com/abinnovision/tally-release/commit/733e55642dc582e24e06d2e2b118110547ace742))
+
 ## 0.1.0 (2026-10-15)
 
 
