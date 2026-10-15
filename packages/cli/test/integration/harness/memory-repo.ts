@@ -16,12 +16,19 @@ export const memoryRepo = (
 	const ids = dag.commits.map((c) => c.id);
 	// memoryGit answers synchronously.
 	const ancestor = (a: string, b: string) => base.isAncestor(a, b) as boolean;
-	const resolve = (ref: string) =>
-		ref === "HEAD"
+	const resolve = (ref: string): string | undefined => {
+		if (ref.endsWith("^1")) {
+			const commit = resolve(ref.slice(0, -2));
+
+			return commit === undefined ? undefined : base.parents(commit)[0];
+		}
+
+		return ref === "HEAD"
 			? ids.at(-1)
 			: ids.includes(ref)
 				? ref
 				: dag.tags?.find((t) => t.name === ref)?.commit;
+	};
 
 	return {
 		git: {

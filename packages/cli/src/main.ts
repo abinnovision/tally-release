@@ -7,6 +7,7 @@ import { check } from "./commands/check.js";
 import { explain } from "./commands/explain.js";
 import { graph } from "./commands/graph.js";
 import { plan } from "./commands/plan.js";
+import { shadow } from "./commands/shadow.js";
 import { painter } from "./output/paint.js";
 import { createSession } from "./session.js";
 import { version } from "./version.js";
@@ -15,6 +16,7 @@ import type { AffectedFlags } from "./commands/affected.js";
 import type { ExplainFlags } from "./commands/explain.js";
 import type { GraphFlags } from "./commands/graph.js";
 import type { PlanFlags } from "./commands/plan.js";
+import type { ShadowFlags } from "./commands/shadow.js";
 import type { Deps, GlobalOptions } from "./session.js";
 
 /** Runs the cli; returns the exit code (0 ok, 1 error, 2 usage). */
@@ -120,6 +122,29 @@ export const main = async (
 		.option("--base <ref>", "diff against this ref")
 		.action(async (unit: string, flags: ExplainFlags) => {
 			await explain(session(), unit, flags);
+		});
+	program
+		.command("shadow")
+		.description("compare the plan with a release-please manifest change")
+		.option(
+			"--manifest <path>",
+			"release-please manifest (default: .release-please-manifest.json)",
+		)
+		.option(
+			"--rp-config <path>",
+			"release-please config (default: release-please-config.json)",
+		)
+		.option("--head <ref>", "compare this merge instead of HEAD (replay)")
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--pin <spec>", "cli version recorded in the report")
+		.option("--out <file>", "write the report to a file")
+		.option(
+			"--summary",
+			"write markdown to $GITHUB_STEP_SUMMARY, else print it",
+		)
+		.option("--strict", "exit 1 on unlabelled mismatches")
+		.action(async (flags: ShadowFlags) => {
+			await shadow(session(), flags);
 		});
 
 	try {

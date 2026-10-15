@@ -89,3 +89,20 @@ export const gitTreeFs = (root: string, sha: string): ReadonlyFs => {
 		},
 	};
 };
+
+/** Content of `path` at commit `ref` in the repository at `root`, undefined when absent. */
+export const gitBlob = (
+	root: string,
+	ref: string,
+	path: string,
+): string | undefined => {
+	try {
+		return execFileSync("git", ["cat-file", "blob", `${ref}:${path}`], {
+			cwd: root,
+			maxBuffer: 256 * 1024 * 1024,
+			stdio: ["ignore", "pipe", "ignore"],
+		}).toString("utf8");
+	} catch {
+		return undefined;
+	}
+};

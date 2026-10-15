@@ -5,7 +5,7 @@ import { basename, relative, resolve, sep } from "node:path";
 import { githubContext } from "./ci/github-env.js";
 import { loadConfig } from "./config/load.js";
 import { githubForge } from "./forge/github.js";
-import { gitTreeFs, nodeFs } from "./fs-ctx.js";
+import { gitBlob, gitTreeFs, nodeFs } from "./fs-ctx.js";
 import { git as runGit } from "./git/exec.js";
 import { gitReader } from "./git/reader.js";
 import { painter } from "./output/paint.js";
@@ -61,6 +61,8 @@ export interface Session {
 	/** Undefined without a token. */
 	readonly forge: Forge | undefined;
 	readonly workspace: () => Promise<Workspace>;
+	/** Content of `path` at commit `ref`, undefined when absent. */
+	readonly readAt: (ref: string, path: string) => string | undefined;
 	/**
 	 * Runs `use` with the workspace and files at commit `ref`, or of the
 	 * working tree when `ref` is null; the config is always read from the
@@ -183,6 +185,8 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 			: undefined,
 		workspace: async () =>
 			await workspaceAt(null, (workspace) => Promise.resolve(workspace)),
+		readAt: (ref, path) =>
+			deps.fsAt ? deps.fsAt(ref).read(path) : gitBlob(root, ref, path),
 		workspaceAt,
 		planAt: async (ref, opts) =>
 			await workspaceAt(
