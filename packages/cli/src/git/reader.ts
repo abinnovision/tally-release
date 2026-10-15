@@ -25,6 +25,8 @@ export interface RepoGit extends GitReader {
 	branch: () => MaybePromise<string | undefined>;
 	/** Target of `origin/HEAD`, for example `origin/main`; undefined if unset. */
 	defaultBranch: () => MaybePromise<string | undefined>;
+	/** Committer date of `ref`, ISO 8601. */
+	commitDate: (ref: string) => MaybePromise<string>;
 }
 
 /** `RepoGit` backed by the `git` executable in `cwd`. */
@@ -195,5 +197,7 @@ export const gitReader = (
 
 			return result.code === 0 ? result.stdout.trim() : undefined;
 		},
+		commitDate: async (ref) =>
+			(await ok(["log", "-1", "--format=%cI", ref, "--"])).trim(),
 	};
 };

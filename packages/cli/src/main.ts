@@ -7,6 +7,7 @@ import { check } from "./commands/check.js";
 import { explain } from "./commands/explain.js";
 import { graph } from "./commands/graph.js";
 import { plan } from "./commands/plan.js";
+import { releasePrs } from "./commands/pr.js";
 import { shadow } from "./commands/shadow.js";
 import { applyVersions } from "./commands/version.js";
 import { painter } from "./output/paint.js";
@@ -17,6 +18,7 @@ import type { AffectedFlags } from "./commands/affected.js";
 import type { ExplainFlags } from "./commands/explain.js";
 import type { GraphFlags } from "./commands/graph.js";
 import type { PlanFlags } from "./commands/plan.js";
+import type { PrFlags } from "./commands/pr.js";
 import type { ShadowFlags } from "./commands/shadow.js";
 import type { VersionFlags } from "./commands/version.js";
 import type { Deps, GlobalOptions } from "./session.js";
@@ -173,6 +175,14 @@ export const main = async (
 		.option("--dry-run", "print the files without writing them")
 		.action(async (flags: VersionFlags) => {
 			await applyVersions(session(), flags);
+		});
+	program
+		.command("pr")
+		.description("create, update and close release PRs of pending releases")
+		.option("--branch <name>", "plan for this branch (default: current)")
+		.option("--dry-run", "print the actions without pushing or editing PRs")
+		.action(async (flags: PrFlags) => {
+			await releasePrs(session(), flags);
 		});
 
 	try {

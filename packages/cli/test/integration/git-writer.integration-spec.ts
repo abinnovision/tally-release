@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { createRepo, git, removeTmpDirs, tmpDir } from "./harness/git-repo.js";
+import { gitReader } from "../../src/git/reader.js";
 import { gitWriter } from "../../src/git/writer.js";
 
 afterAll(removeTmpDirs);
@@ -58,6 +59,7 @@ describe("git writer (E30)", () => {
 		const index = git(dir, "ls-files", "--stage");
 
 		const commit = { parent: head, files, message: "chore(release): x", date };
+		expect(await gitReader(dir).commitDate("HEAD")).toBe(date);
 		const sha = await writer.commitFiles(commit);
 		expect(await writer.commitFiles(commit)).toBe(sha);
 		expect(git(dir, "status", "--porcelain")).toBe(status);

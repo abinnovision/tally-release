@@ -26,6 +26,27 @@ const unless = async <T>(
 	}
 };
 
+interface PullData {
+	number: number;
+	head: { ref: string; sha: string };
+	base: { ref: string };
+	body: string | null;
+	labels: { name?: string }[];
+	merged_at: string | null;
+	merge_commit_sha: string | null;
+}
+
+const releasePr = (pr: PullData): ReleasePr => ({
+	number: pr.number,
+	head: pr.head.ref,
+	headSha: pr.head.sha,
+	base: pr.base.ref,
+	body: pr.body ?? "",
+	labels: pr.labels.map((l) => l.name ?? ""),
+	mergedAt: pr.merged_at,
+	mergeCommitSha: pr.merged_at === null ? null : pr.merge_commit_sha,
+});
+
 export interface GithubForgeOptions {
 	token: string;
 	/** `GITHUB_API_URL`, defaults to the public API. */
@@ -114,18 +135,13 @@ export const githubForge = (opts: GithubForgeOptions): Forge => {
 			return pulls
 				.filter(
 					(pr) =>
-						pr.base.ref === base && (state === "open" || pr.merged_at !== null),
+						pr.base.ref === base &&
+						// A deleted fork's repo is null.
+						(pr.head.repo as { full_name: string } | null)?.full_name ===
+							`${repo.owner}/${repo.repo}` &&
+						(state === "open" || pr.merged_at !== null),
 				)
-				.map((pr): ReleasePr => ({
-					number: pr.number,
-					head: pr.head.ref,
-					headSha: pr.head.sha,
-					base: pr.base.ref,
-					body: pr.body ?? "",
-					labels: pr.labels.map((l) => l.name),
-					mergedAt: pr.merged_at,
-					mergeCommitSha: pr.merged_at === null ? null : pr.merge_commit_sha,
-				}))
+				.map(releasePr)
 				.sort((a, b) =>
 					state === "open" || a.mergedAt === b.mergedAt
 						? a.number - b.number
@@ -133,6 +149,16 @@ export const githubForge = (opts: GithubForgeOptions): Forge => {
 							? -1
 							: 1,
 				);
+		},
+		openPr: async (repo, { head, base }) => {
+			const { data } = await octokit.rest.pulls.list({
+				...repo,
+				head: `${repo.owner}:${head}`,
+				base,
+				state: "open",
+			});
+
+			return data[0] && releasePr(data[0]);
 		},
 		createPr: async (repo, pr) =>
 			(await octokit.rest.pulls.create({ ...repo, ...pr })).data.number,
