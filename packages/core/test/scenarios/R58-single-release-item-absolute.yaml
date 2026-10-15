@@ -1,0 +1,42 @@
+description: >-
+  One group holds all released units, so a rule without group still checks
+  the group's from: sdk at 2.0.0 on release/1.x is E_CAP_BASE.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: tools, root: tools }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+    packages/b: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: "release/{major}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      files:
+        { packages/a/index.ts: "0", packages/b/index.ts: "0", tools/x.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v2.0.0, commit: c0 }
+    - { name: b-v2.0.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP_BASE
+  details:
+    {
+      group: sdk,
+      branch: release/1.x,
+      rule: "release/{major}.x",
+      major: 1,
+      from: 2.0.0,
+    }

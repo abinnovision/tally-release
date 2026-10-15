@@ -17,7 +17,7 @@ import type { Plan, PlanLine, PlanOptions, Warning } from "@tallyrelease/core";
 const lineLabel = (line: PlanLine | null, branch: string): string =>
 	line === null
 		? `${branch} (no branch rule)`
-		: `${branch} (rule ${line.rule}, ${line.kind} line${line.channel === null ? "" : `, channel ${line.channel}`})`;
+		: `${branch} (rule ${line.rule}, ${line.kind} line${line.channel === null ? "" : `, channel ${line.channel}`}${line.maxBump === null ? "" : `, max bump ${line.maxBump}`}${line.absolute === null ? "" : `, base ${String(line.absolute.major)}.${line.absolute.minor === undefined ? "x" : String(line.absolute.minor)} of ${line.absolute.unit ?? line.absolute.group ?? ""}`})`;
 
 const text = (session: Session, doc: Plan, base: BuildBase): string => {
 	const paint = painter(session.stdout);

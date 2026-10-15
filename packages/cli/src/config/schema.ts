@@ -155,6 +155,20 @@ export const configSchema = z.strictObject({
 							"Prerelease channel (letters, digits, dash); may use {major} and {minor} captured by name.",
 					})
 					.exactOptional(),
+				unit: z
+					.string()
+					.meta({
+						description:
+							"Maintenance rules: ungrouped released unit whose version must be on the line captured by name. Excludes group.",
+					})
+					.exactOptional(),
+				group: z
+					.string()
+					.meta({
+						description:
+							"Maintenance rules: fixed group whose version must be on the line captured by name. Excludes unit.",
+					})
+					.exactOptional(),
 			}),
 		)
 		.meta({

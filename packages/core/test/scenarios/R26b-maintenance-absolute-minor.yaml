@@ -1,0 +1,29 @@
+description: >-
+  On release/1.4.x the absolute check also compares the minor: web at 1.5.0
+  is E_CAP_BASE.
+branch: release/1.4.x
+plugins:
+  - name: stub
+    units:
+      - { id: web, root: apps/web }
+      - { id: api, root: apps/api }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.{minor}.x", line: maintenance, unit: web }
+git:
+  commits:
+    - id: c0
+      files: { apps/web/index.ts: "0", apps/api/index.ts: "0" }
+    - id: c1
+      message: "fix: web"
+      files: { apps/web/index.ts: "1" }
+  tags:
+    - { name: web-v1.5.0, commit: c0 }
+    - { name: api-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP_BASE
+  details: { unit: web, branch: release/1.4.x, major: 1, minor: 4, from: 1.5.0 }

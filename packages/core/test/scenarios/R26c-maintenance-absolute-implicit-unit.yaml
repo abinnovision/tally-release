@@ -1,0 +1,27 @@
+description: >-
+  The only released unit gets the absolute check without unit on the rule:
+  a at 2.0.0 on release/1.x is E_CAP_BASE.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v2.0.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP_BASE
+  details: { unit: a, branch: release/1.x, major: 1, from: 2.0.0 }

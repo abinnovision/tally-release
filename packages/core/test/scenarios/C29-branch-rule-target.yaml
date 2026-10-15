@@ -1,0 +1,19 @@
+description: A rule naming a group that does not exist is E_BRANCH_RULE.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.x", line: maintenance, group: sdk }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+base: null
+plan: {}
+error:
+  code: E_BRANCH_RULE
+  details: { rule: "release/{major}.x", group: sdk }

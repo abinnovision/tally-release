@@ -25,6 +25,10 @@ export interface BranchConfig {
 	line: "default" | "maintenance";
 	/** Prerelease channel, may use the `{major}`/`{minor}` captures of `name`. */
 	channel?: string;
+	/** Maintenance rules: the unit of the absolute check; excludes `group`. */
+	unit?: string;
+	/** Maintenance rules: the group of the absolute check; excludes `unit`. */
+	group?: string;
 }
 
 export interface BumpsConfig {

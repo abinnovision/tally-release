@@ -1,0 +1,38 @@
+description: >-
+  A feat on a release/{major}.{minor}.x branch exceeds the patch limit:
+  E_CAP names the unit, the limit and the offending commit.
+branch: release/1.4.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.{minor}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a crash"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "feat: a option"
+      files: { packages/a/index.ts: "2" }
+  tags:
+    - { name: a-v1.4.2, commit: c0 }
+    - { name: b-v3.0.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP
+  details:
+    unit: a
+    rule: "release/{major}.{minor}.x"
+    limit: patch
+    from: 1.4.2
+    next: 1.5.0
+    commits: [{ sha: c2, subject: a option }]

@@ -1,0 +1,46 @@
+description: >-
+  Merging a maintenance release back moves the base tag but not the line
+  base, so N keeps growing while next stays 2.0.0.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+    - { name: "release/{major}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat!: a rewrite"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      parents: [c0]
+      message: "fix: a hotfix"
+      files: { packages/a/fix.ts: "2" }
+    - id: m
+      parents: [c1, c2]
+      message: "Merge branch 'release/1.x'"
+    - id: c3
+      message: "fix: a"
+      files: { packages/a/index.ts: "3" }
+  tags:
+    - { name: a-v1.4.2, commit: c0 }
+    - { name: a-v1.4.3, commit: c2 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        baseTag: a-v1.4.3
+        lineBaseTag: a-v1.4.2
+        from: 1.4.3
+        bump: major
+        next: 2.0.0
+        version: 2.0.0-beta.3
+    warnings: []

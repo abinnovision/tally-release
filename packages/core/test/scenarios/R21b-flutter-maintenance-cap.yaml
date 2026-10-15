@@ -1,0 +1,31 @@
+description: A breaking change on a flutter unit's maintenance branch is E_CAP.
+branch: release/1.x
+plugins:
+  - name: stub
+    schemes: [flutter]
+    units:
+      - { id: a, root: packages/a, scheme: flutter }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: "release/{major}.x", line: maintenance }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat!: a rewrite"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.2.0+10, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP
+  details:
+    unit: a
+    limit: minor
+    from: 1.2.0+10
+    next: 2.0.0+11
+    commits: [{ sha: c1, subject: a rewrite, level: major }]

@@ -1,0 +1,36 @@
+description: With group sdk at 2.0.0 on release/1.x the absolute check fails with E_CAP_BASE.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: "release/{major}.x", line: maintenance, group: sdk }
+git:
+  commits:
+    - id: c0
+      files:
+        {
+          packages/a/index.ts: "0",
+          packages/b/index.ts: "0",
+          packages/c/index.ts: "0",
+        }
+    - id: c1
+      message: "fix: c"
+      files: { packages/c/index.ts: "1" }
+  tags:
+    - { name: a-v2.0.0, commit: c0 }
+    - { name: b-v1.3.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP_BASE
+  details: { group: sdk, major: 1, from: 2.0.0 }

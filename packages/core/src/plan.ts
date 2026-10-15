@@ -1,8 +1,9 @@
 import { computeAffected } from "./affected.js";
-import { matchBranch } from "./branches.js";
+import { checkLimits, matchBranch } from "./branches.js";
 import { collectPlanFacts } from "./facts.js";
 import { propagate } from "./propagate.js";
 import {
+	changeLevel,
 	footerOf,
 	reach,
 	releaseAsWarnings,
@@ -11,6 +12,7 @@ import {
 	unitIntent,
 } from "./release.js";
 import { noMatchingTag } from "./tags.js";
+import { maxLevel } from "./util.js";
 import { validateRelease } from "./validate.js";
 
 import type {
@@ -19,7 +21,13 @@ import type {
 	AffectedReason,
 	AffectedUnit,
 } from "./affected.js";
-import type { Line } from "./branches.js";
+import type {
+	CoreVersion,
+	Line,
+	LimitCommit,
+	LimitItem,
+	ReleaseItem,
+} from "./branches.js";
 import type { Warning } from "./errors.js";
 import type { PlanFacts, UnitFacts } from "./facts.js";
 import type {
@@ -172,6 +180,115 @@ const unitPlan = (entry: Entry, all: boolean): UnitPlan | undefined => {
 	};
 };
 
+/** The only release item (ungrouped released unit or group), else null. */
+const singleItem = (workspace: Workspace): ReleaseItem | null => {
+	const grouped = new Set(workspace.groups.flatMap((g) => g.members));
+	const items: ReleaseItem[] = [
+		...workspace.groups.map((g) => ({ unit: null, group: g.name })),
+		...workspace.units
+			.filter((u) => u.version !== "none" && !grouped.has(u.id))
+			.map((u) => ({ unit: u.id, group: null })),
+	];
+
+	return items.length === 1 ? (items[0] ?? null) : null;
+};
+
+/**
+ * Limit input of a release item over its member ids: the changes and
+ * Release-As values that produce `next`.
+ */
+const limitItem = (
+	item: ReleaseItem & {
+		ids: readonly string[];
+		from: string | null;
+		next: string | null;
+	},
+	units: {
+		inputs: ReadonlyMap<string, ReleaseInput<any>>;
+		intents: ReadonlyMap<string, UnitIntent<any>>;
+	},
+): LimitItem | undefined => {
+	const first = item.ids
+		.map((id) => units.inputs.get(id))
+		.find((i) => i !== undefined);
+	if (!first) {
+		return undefined;
+	}
+
+	const { scheme, settings } = first;
+	const core = (version: string | null): CoreVersion | null => {
+		const parsed: unknown =
+			version === null ? undefined : scheme.parse(version);
+		if (parsed === undefined || version === null) {
+			return null;
+		}
+
+		const { major, minor } = scheme.core(parsed);
+
+		return { major, minor, version };
+	};
+
+	const from = core(item.from);
+	// Keyed by sha, file-based changes by identity; members merge.
+	const commits = new Map<unknown, LimitCommit>();
+	for (const id of item.ids) {
+		const input = units.inputs.get(id);
+		const intent = units.intents.get(id);
+		for (const unitChange of intent?.changes ?? []) {
+			const { change, via } = unitChange;
+			const key = change.sha ?? change;
+			const prev = commits.get(key);
+			const level = changeLevel(unitChange, settings, from?.major === 0);
+			const entry: LimitCommit = {
+				...(change.sha === undefined ? {} : { sha: change.sha }),
+				subject: change.subject,
+				level,
+				...(via === undefined ? {} : { via }),
+			};
+			// The highest level wins; a direct change wins over an absorbed one.
+			const kept =
+				prev !== undefined &&
+				maxLevel(prev.level, level) === prev.level &&
+				(level !== prev.level || via !== undefined);
+			commits.set(
+				key,
+				kept
+					? prev
+					: { ...entry, ...(prev?.releaseAs && { releaseAs: prev.releaseAs }) },
+			);
+		}
+
+		const releaseAs = intent?.releaseAs;
+		if (input && releaseAs) {
+			const { sha } = releaseAs;
+			const key = sha ?? `Release-As: ${releaseAs.raw}`;
+			const { major, minor } = scheme.core(releaseAs.version);
+			commits.set(key, {
+				...(sha === undefined ? {} : { sha }),
+				subject:
+					input.range.changes.find(
+						(c) => sha !== undefined && c.change.sha === sha,
+					)?.change.subject ?? key,
+				level: null,
+				...commits.get(key),
+				releaseAs: {
+					major,
+					minor,
+					version: scheme.format(releaseAs.version),
+				},
+			});
+		}
+	}
+
+	return {
+		unit: item.unit,
+		group: item.group,
+		from,
+		next: core(item.next),
+		commits: [...commits.values()],
+	};
+};
+
 /** Releases of fixed group members, by unit id, and the group entries. */
 const resolveGroupReleases = (
 	{ facts, affected }: Pick<ResolveInput, "facts" | "affected">,
@@ -240,7 +357,11 @@ const resolveReleases = (
 ): { plan: Plan; releases: Map<string, UnitRelease> } => {
 	const { affected, facts } = input;
 	const { units: _, ...doc } = affected;
-	const line = matchBranch(workspace.release.branches, affected.branch);
+	const line = matchBranch(
+		workspace.release.branches,
+		affected.branch,
+		singleItem(workspace),
+	);
 	const warnings = [
 		...affected.warnings,
 		...lineWarnings(workspace, affected.branch, line),
@@ -322,6 +443,47 @@ const resolveReleases = (
 			units.push(entry);
 		}
 	}
+
+	const limits = { inputs, intents };
+	const rule = workspace.release.branches.find((r) => r.name === line?.rule);
+	checkLimits(
+		line,
+		[
+			...groups.flatMap(
+				(g) =>
+					limitItem(
+						{
+							unit: null,
+							group: g.name,
+							ids: g.members,
+							from: g.from,
+							next: g.next,
+						},
+						limits,
+					) ?? [],
+			),
+			...ordered.flatMap((u) => {
+				const release = releases.get(u.id);
+
+				return groupOf.has(u.id) || !release
+					? []
+					: (limitItem(
+							{
+								unit: u.id,
+								group: null,
+								ids: [u.id],
+								from: release.from,
+								next: release.next,
+							},
+							limits,
+						) ?? []);
+			}),
+		],
+		{
+			branch: affected.branch,
+			implicit: rule?.unit === null && rule.group === null,
+		},
+	);
 
 	warnings.push(...noMatchingTag(workspace.units, facts.units, facts.tagNames));
 

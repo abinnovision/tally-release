@@ -1,0 +1,56 @@
+description: >-
+  Group E_CAP merges a commit across members: a qualified Release-As on a
+  commit touching a and b, and a breaking change touching a and db that b
+  absorbs as a patch, both stay listed.
+branch: release/1.x
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: db, root: packages/db }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+    packages/b: { release: true }
+  deps:
+    - { from: db, to: b }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: "release/{major}.x", line: maintenance, group: sdk }
+git:
+  commits:
+    - id: c0
+      files:
+        {
+          packages/a/index.ts: "0",
+          packages/b/index.ts: "0",
+          packages/db/index.ts: "0",
+        }
+    - id: c1
+      message: "fix: a and b\n\nRelease-As: a@2.0.0"
+      files: { packages/a/index.ts: "1", packages/b/index.ts: "1" }
+    - id: c2
+      message: "feat!: a and db"
+      files: { packages/a/index.ts: "2", packages/db/index.ts: "2" }
+  tags:
+    - { name: a-v1.4.0, commit: c0 }
+    - { name: b-v1.4.0, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_CAP
+  details:
+    group: sdk
+    limit: minor
+    next: 2.0.0
+    commits:
+      - { sha: c2, subject: a and db, level: major }
+      - {
+          sha: c1,
+          subject: a and b,
+          level: patch,
+          releaseAs: { version: 2.0.0 },
+        }

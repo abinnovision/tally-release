@@ -1,0 +1,41 @@
+description: >-
+  A flutter unit on a maintenance branch gets a build number above the
+  highest tagged build, including main's unreachable tag.
+branch: release/1.x
+plugins:
+  - name: stub
+    schemes: [flutter]
+    units:
+      - { id: a, root: packages/a, scheme: flutter }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+    - { name: "release/{major}.x", line: maintenance, channel: "rc-{major}" }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat!: a rewrite"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      parents: [c0]
+      message: "fix: a"
+      files: { packages/a/fix.ts: "2" }
+  tags:
+    - { name: a-v1.2.0+10, commit: c0 }
+    - { name: a-v2.0.0+40, commit: c1 }
+base: c0
+plan: {}
+expect:
+  plan:
+    line: { maxBump: minor, absolute: { unit: a, major: 1 } }
+    units:
+      - id: a
+        from: 1.2.0+10
+        bump: patch
+        next: 1.2.1+41
+        version: 1.2.1+41
+    warnings: []
