@@ -22,6 +22,7 @@
 			"default": "./dist/index.js"
 		},
 		"./affected.schema.json": "./dist/affected.schema.json",
+		"./plan.schema.json": "./dist/plan.schema.json",
 		"./tallyrelease.schema.json": "./dist/tallyrelease.schema.json"
 	},
 	"bin": {
@@ -51,6 +52,7 @@
 		"@octokit/rest": "^22.0.1",
 		"@tallyrelease/core": "workspace:^",
 		"commander": "^15.0.0",
+		"picomatch": "^4.0.7",
 		"tinyglobby": "^0.2.17",
 		"yaml": "^2.9.1",
 		"zod": "^4.6.6"
@@ -60,6 +62,7 @@
 		"@abinnovision/prettier-config": "^2.2.0",
 		"@internal/tsconfig": "workspace:*",
 		"@types/node": "^24.19.2",
+		"@types/picomatch": "^4.0.3",
 		"@vitest/coverage-v8": "^5.0.4",
 		"ajv": "^8.20.0",
 		"eslint": "^10.12.0",
@@ -80,6 +83,7 @@
 				"default": "./dist/index.js"
 			},
 			"./affected.schema.json": "./dist/affected.schema.json",
+			"./plan.schema.json": "./dist/plan.schema.json",
 			"./tallyrelease.schema.json": "./dist/tallyrelease.schema.json"
 		},
 		"npm": true

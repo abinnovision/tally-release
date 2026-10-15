@@ -1,6 +1,7 @@
 import { TallyError } from "./errors.js";
 import { compare } from "./util.js";
 
+import type { Warning } from "./errors.js";
 import type { TagRef, Unit, VersionScheme } from "./plugin.js";
 
 const SPECIAL = /[\\^$.*+?()[\]{}|/]/gu;
@@ -132,4 +133,38 @@ export const matchUnitTags = (
 	}
 
 	return matched;
+};
+
+/**
+ * Released units without a matching tag while some tag not matched by a
+ * released unit contains their id, delimited by non-alphanumeric characters
+ * or the tag's ends.
+ */
+export const noMatchingTag = (
+	units: readonly Unit[],
+	matched: readonly { id: string; tags: readonly { name: string }[] }[],
+	tagNames: readonly string[],
+): Warning[] => {
+	const names = new Set(matched.flatMap((m) => m.tags.map((t) => t.name)));
+	const tags = tagNames.filter((t) => !names.has(t));
+
+	return matched.flatMap((m) => {
+		const unit = units.find((u) => u.id === m.id);
+		const id = new RegExp(
+			`(?:^|[^A-Za-z0-9])${m.id.replace(SPECIAL, "\\$&")}(?:[^A-Za-z0-9]|$)`,
+			"u",
+		);
+		const similar = tags.find((t) => id.test(t));
+		if (!unit || m.tags.length > 0 || similar === undefined) {
+			return [];
+		}
+
+		return [
+			{
+				code: "W_NO_MATCHING_TAG",
+				message: `released unit "${m.id}" has no tag matching "${unit.tagFormat.replaceAll("{id}", m.id)}", but "${similar}" contains its id`,
+				unit: m.id,
+			},
+		];
+	});
 };

@@ -17,3 +17,6 @@ export const affectedGithubOutput = (doc: AffectedDoc): string =>
 		`base=${doc.build.base ?? ""}\n`,
 		`base-source=${doc.build.baseSource}\n`,
 	].join("");
+
+/** `$GITHUB_OUTPUT` entry of `plan`: the path of the written plan document. */
+export const planGithubOutput = (path: string): string => `plan=${path}\n`;

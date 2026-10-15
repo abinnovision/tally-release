@@ -86,9 +86,9 @@ const pickReleaseAs = <V>(
 		commits: readonly CommitValues[];
 	},
 	warnings: Warning[],
-): V | undefined => {
+): ReleaseAsWinner<V> | undefined => {
 	const { unit, scheme, from, commits } = input;
-	let winner: { sha?: string; raw: string; version: V } | undefined;
+	let winner: ReleaseAsWinner<V> | undefined;
 	for (const { sha, values } of commits) {
 		for (const raw of values) {
 			const version = parseReleaseAs(scheme, raw);
@@ -100,6 +100,7 @@ const pickReleaseAs = <V>(
 				warnings.push({
 					code: "W_RELEASE_AS_INVALID",
 					message: `unit "${unit.id}": Release-As "${raw}"${at(sha)} ${problem ?? ""}; ignored`,
+					unit: unit.id,
 				});
 			} else if (!winner) {
 				winner = { ...(sha === undefined ? {} : { sha }), raw, version };
@@ -107,12 +108,13 @@ const pickReleaseAs = <V>(
 				warnings.push({
 					code: "W_RELEASE_AS_CONFLICT",
 					message: `unit "${unit.id}": Release-As "${winner.raw}"${at(winner.sha)} wins over "${raw}"${at(sha)}`,
+					unit: unit.id,
 				});
 			}
 		}
 	}
 
-	return winner?.version;
+	return winner;
 };
 
 /**
@@ -181,6 +183,7 @@ const initialBelowPrerelease = <V>(
 				{
 					code: "W_INITIAL_BELOW_PRERELEASE",
 					message: `unit "${facts.id}": initial version ${scheme.format(initial)} does not exceed prerelease tag "${highest.name}"`,
+					unit: facts.id,
 				},
 			];
 };
@@ -208,6 +211,14 @@ const fromOf = <V>(scheme: VersionScheme<V>, facts: UnitFacts) => {
 		? undefined
 		: { raw: base.version, version };
 };
+
+/** The Release-As footer value that applies to a unit. */
+export interface ReleaseAsWinner<V> {
+	readonly sha?: string;
+	/** As written in the footer. */
+	readonly raw: string;
+	readonly version: V;
+}
 
 /** A normalized branch rule. */
 export interface BranchRule {
@@ -239,7 +250,7 @@ export interface UnitChange {
 export interface UnitIntent<V> {
 	/** Own and absorbed level. */
 	readonly bump: BumpLevel | null;
-	readonly releaseAs: V | undefined;
+	readonly releaseAs: ReleaseAsWinner<V> | undefined;
 	/** Core commit order. */
 	readonly changes: readonly UnitChange[];
 	/** Absorbed units of the changes with `via`, sorted. */
@@ -252,6 +263,11 @@ export interface UnitRelease {
 	readonly from: string | null;
 	readonly bump: BumpLevel | null;
 	readonly releaseAs: string | null;
+	/** The footer that set `releaseAs`. */
+	readonly releaseAsFooter: {
+		readonly sha?: string;
+		readonly raw: string;
+	} | null;
 	/** Null without a pending bump or Release-As. */
 	readonly next: string | null;
 	/** Prerelease of `next` on `channel`; null without a channel or `next`. */
@@ -321,8 +337,12 @@ export const releaseAsWarnings = (
 		units.filter((u) => u.version !== "none").map((u) => u.id),
 	);
 	const warnings = new Map<string, Warning>();
-	const warn = (code: string, message: string) => {
-		warnings.set(`${code}\0${message}`, { code, message });
+	const warn = (code: string, message: string, unit?: string) => {
+		warnings.set(`${code}\0${message}`, {
+			code,
+			message,
+			...(unit === undefined ? {} : { unit }),
+		});
 	};
 
 	for (const { changes } of ranges) {
@@ -344,6 +364,7 @@ export const releaseAsWarnings = (
 					warn(
 						"W_RELEASE_AS_IGNORED",
 						`Release-As "${unit}@${version}"${at(change.sha)} names unreleased unit "${unit}"`,
+						unit,
 					);
 				}
 			}
@@ -398,11 +419,12 @@ export const unitIntent = <V>(
  */
 export const releaseUnit = <V>(
 	input: ReleaseInput<V>,
-	intent: { bump: BumpLevel | null; releaseAs: V | undefined },
+	intent: { bump: BumpLevel | null; releaseAs: ReleaseAsWinner<V> | undefined },
 	warnings: Warning[],
 ): UnitRelease => {
 	const { unit, scheme, facts } = input;
-	const { bump, releaseAs } = intent;
+	const { bump } = intent;
+	const releaseAs = intent.releaseAs?.version;
 	const base = facts.baseTag;
 	const from = fromOf(scheme, facts);
 	const initial =
@@ -433,6 +455,14 @@ export const releaseUnit = <V>(
 		from: base?.version ?? null,
 		bump,
 		releaseAs: releaseAs === undefined ? null : scheme.format(releaseAs),
+		releaseAsFooter: intent.releaseAs
+			? {
+					...(intent.releaseAs.sha === undefined
+						? {}
+						: { sha: intent.releaseAs.sha }),
+					raw: intent.releaseAs.raw,
+				}
+			: null,
 		next: raw === undefined ? null : scheme.format(scheme.release(raw, ctx)),
 		prerelease:
 			raw === undefined || channel === null

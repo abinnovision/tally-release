@@ -1,9 +1,11 @@
 import { validateBranches } from "./branches.js";
 import { TallyError } from "./errors.js";
 import { schemeRegistry } from "./schemes.js";
-import { compileTagFormat } from "./tags.js";
+import { compileTagFormat, matchUnitTags, noMatchingTag } from "./tags.js";
+import { uniqueSorted } from "./util.js";
 
-import type { VersionScheme } from "./plugin.js";
+import type { Warning } from "./errors.js";
+import type { TagRef, VersionScheme } from "./plugin.js";
 import type { Workspace } from "./workspace.js";
 
 /**
@@ -45,4 +47,25 @@ export const validateRelease = (
 	validateBranches(workspace.release.branches);
 
 	return schemes;
+};
+
+/**
+ * Checks `tags` against the released units: throws `E_TAG_FORMAT_OVERLAP`,
+ * returns `W_NO_MATCHING_TAG` warnings.
+ */
+export const validateTags = (
+	workspace: Workspace,
+	tags: readonly TagRef[],
+): Warning[] => {
+	const matched = matchUnitTags(
+		workspace.units,
+		tags,
+		schemeRegistry(workspace.schemes),
+	);
+
+	return noMatchingTag(
+		workspace.units,
+		[...matched].map(([id, m]) => ({ id, tags: m.tags })),
+		uniqueSorted(tags.map((t) => t.name)),
+	);
 };

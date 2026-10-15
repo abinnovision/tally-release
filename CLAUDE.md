@@ -36,7 +36,7 @@ Every `make` target runs `tools/<target>.sh`; ordering and flags live in the scr
 
 - Prefer fakes at seams over module mocks. Do not use `vi.mock` for modules and do not add `vitest-mock-extended`.
 - Core: scenarios are YAML in `packages/core/test/scenarios/` served by `memoryGit`, `memoryFs`, `memoryCtx`.
-- Cli: `main(argv, deps)` takes `deps = { env, cwd, stdout, stderr, git?, fs?, forge? }`. Most integration scenarios run in-process with `memoryGit`, `memoryFs` and a `fakeForge`. A few end-to-end tests use real git in tmp repos.
+- Cli: `main(argv, deps)` takes `deps = { env, cwd, stdout, stderr, git?, fs?, fsAt?, forge? }`. Most integration scenarios run in-process with `memoryGit`, `memoryFs` and a `fakeForge`. A few end-to-end tests use real git in tmp repos.
 - `gitReaderConformance(makeReader)` runs against `memoryGit` and the real reader.
 - Unit test projects are named `<package>#unit`, integration projects `<package>#integration` (`*.integration-spec.ts`).
 - Keep tests and harnesses small.

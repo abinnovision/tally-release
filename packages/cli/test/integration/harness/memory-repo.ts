@@ -5,7 +5,13 @@ import type { ReadonlyFs } from "@tallyrelease/core";
 import type { Dag } from "@tallyrelease/core/testing";
 
 /** `RepoGit` and `ReadonlyFs` over a commit graph; the last commit is HEAD on `main`. */
-export const memoryRepo = (dag: Dag): { git: RepoGit; fs: ReadonlyFs } => {
+export const memoryRepo = (
+	dag: Dag,
+): {
+	git: RepoGit;
+	fs: ReadonlyFs;
+	fsAt: (ref: string) => ReadonlyFs;
+} => {
 	const base = memoryGit(dag);
 	const ids = dag.commits.map((c) => c.id);
 	// memoryGit answers synchronously.
@@ -28,5 +34,6 @@ export const memoryRepo = (dag: Dag): { git: RepoGit; fs: ReadonlyFs } => {
 			defaultBranch: () => undefined,
 		},
 		fs: memoryFs(base.tree("HEAD")),
+		fsAt: (ref) => memoryFs(base.tree(ref)),
 	};
 };

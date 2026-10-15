@@ -3,6 +3,7 @@ import { TallyError } from "@tallyrelease/core";
 import type { Env, GithubContext } from "./github-env.js";
 import type { Forge } from "../forge/forge.js";
 import type { RepoGit } from "../git/reader.js";
+import type { Paint } from "../output/paint.js";
 import type { BaseSource, Warning } from "@tallyrelease/core";
 
 const ZERO_SHA = /^0+$/;
@@ -268,3 +269,27 @@ export const resolveBuildBase = async (
 			return result(null, "none");
 	}
 };
+
+/** Short description of where the build base came from. */
+export const baseLabel = (base: BuildBase): string => {
+	switch (base.source) {
+		case "cli":
+			return `--base ${base.ref ?? ""}`;
+		case "push-before":
+			return "push before";
+		case "pr-merge-base":
+			return "merge base with the PR target";
+		case "merge-group":
+			return "merge group base";
+		case "forge-last-success":
+			return "last successful run";
+		case "local-merge-base":
+			return `merge base with ${base.ref ?? ""}`;
+		case "none":
+			return "everything is affected";
+	}
+};
+
+/** `base` line of the `plan` and `explain` text. */
+export const baseLine = (paint: Paint, base: BuildBase): string =>
+	`${paint("bold", "base")}    ${paint("yellow", base.base?.slice(0, 7) ?? "none")} ${paint("dim", `(${baseLabel(base)})`)}`;

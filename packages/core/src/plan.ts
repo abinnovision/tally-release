@@ -8,6 +8,7 @@ import {
 	releaseUnit,
 	unitIntent,
 } from "./release.js";
+import { noMatchingTag } from "./tags.js";
 import { validateRelease } from "./validate.js";
 
 import type {
@@ -28,37 +29,6 @@ import type {
 } from "./plugin.js";
 import type { ReleaseInput, UnitIntent, UnitRelease } from "./release.js";
 import type { Workspace } from "./workspace.js";
-
-/**
- * Released units without a matching tag while some tag not matched by a
- * released unit contains their id, delimited by non-alphanumeric characters
- * or the tag's ends.
- */
-const noMatchingTag = (workspace: Workspace, facts: PlanFacts): Warning[] => {
-	const matched = new Set(
-		facts.units.flatMap((f) => f.tags.map((t) => t.name)),
-	);
-	const tags = facts.tagNames.filter((t) => !matched.has(t));
-
-	return facts.units.flatMap((f) => {
-		const unit = workspace.units.find((u) => u.id === f.id);
-		const id = new RegExp(
-			`(?:^|[^A-Za-z0-9])${f.id.replaceAll(".", "\\.")}(?:[^A-Za-z0-9]|$)`,
-			"u",
-		);
-		const similar = tags.find((t) => id.test(t));
-		if (!unit || f.tags.length > 0 || similar === undefined) {
-			return [];
-		}
-
-		return [
-			{
-				code: "W_NO_MATCHING_TAG",
-				message: `released unit "${f.id}" has no tag matching "${unit.tagFormat.replaceAll("{id}", f.id)}", but "${similar}" contains its id`,
-			},
-		];
-	});
-};
 
 const lineWarnings = (
 	workspace: Workspace,
@@ -153,6 +123,7 @@ const UNRELEASED: UnitRelease = {
 	from: null,
 	bump: null,
 	releaseAs: null,
+	releaseAsFooter: null,
 	next: null,
 	prerelease: null,
 };
@@ -188,6 +159,86 @@ const unitPlan = (entry: Entry, all: boolean): UnitPlan | undefined => {
 		version: kind === "prerelease" ? prerelease : null,
 		sha: entry.head,
 		changes: planChanges(entry.intent),
+	};
+};
+
+/** `resolvePlan` with the release of each released unit. */
+const resolveReleases = (
+	workspace: Workspace,
+	input: ResolveInput,
+): { plan: Plan; releases: Map<string, UnitRelease> } => {
+	const { affected, facts } = input;
+	const { units: _, ...doc } = affected;
+	const line = matchBranch(workspace.release.branches, affected.branch);
+	const warnings = [
+		...affected.warnings,
+		...lineWarnings(workspace, affected.branch, line),
+		...facts.warnings,
+		...releaseAsWarnings(workspace.units, facts.ranges),
+	];
+
+	const rank = new Map(workspace.graph.order.map((id, i) => [id, i]));
+	const ordered = [...workspace.units].sort(
+		(a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
+	);
+	const hits = new Map(affected.units.map((u) => [u.id, u]));
+	const factsById = new Map(facts.units.map((f) => [f.id, f]));
+	const inputs = releaseInputs(workspace, input, line?.channel ?? null);
+	const intents = new Map<string, UnitIntent<unknown>>(
+		[...inputs].map(([id, i]) => [id, unitIntent(i, warnings)]),
+	);
+	const propagated = propagate(
+		workspace.graph,
+		workspace.units,
+		new Map(
+			[...intents].map(([id, i]) => [
+				id,
+				{ bump: i.bump, pending: i.bump !== null || i.releaseAs !== undefined },
+			]),
+		),
+	);
+
+	const units: UnitPlan[] = [];
+	const releases = new Map<string, UnitRelease>();
+	for (const unit of ordered) {
+		const { id } = unit;
+		const unitInput = inputs.get(id);
+		const intent = intents.get(id);
+		const state = propagated.get(id);
+		const release =
+			unitInput && intent
+				? releaseUnit(
+						unitInput,
+						{ bump: state?.bump ?? intent.bump, releaseAs: intent.releaseAs },
+						warnings,
+					)
+				: undefined;
+		if (release) {
+			releases.set(id, release);
+		}
+
+		const entry = unitPlan(
+			{
+				unit,
+				hit: hits.get(id),
+				facts: factsById.get(id),
+				intent,
+				release,
+				propagatedFrom: state?.propagatedFrom ?? [],
+				head: facts.head,
+			},
+			input.all,
+		);
+		if (entry) {
+			units.push(entry);
+		}
+	}
+
+	warnings.push(...noMatchingTag(workspace.units, facts.units, facts.tagNames));
+
+	return {
+		plan: { ...doc, line, units, groups: [], released: [], warnings },
+		releases,
 	};
 };
 
@@ -281,75 +332,38 @@ export interface ResolveInput {
 }
 
 /** Release math over collected facts; no I/O. */
-export const resolvePlan = (
+export const resolvePlan = (workspace: Workspace, input: ResolveInput): Plan =>
+	resolveReleases(workspace, input).plan;
+
+/** A plan with the facts it was resolved from. */
+export interface PlanResult {
+	plan: Plan;
+	facts: PlanFacts;
+	/** Releases of the released units with a scheme. */
+	releases: ReadonlyMap<string, UnitRelease>;
+}
+
+/** `computePlan` keeping the collected facts, for `explainUnit`. */
+export const planWithFacts = async (
 	workspace: Workspace,
-	input: ResolveInput,
-): Plan => {
-	const { affected, facts } = input;
-	const { units: _, ...doc } = affected;
-	const line = matchBranch(workspace.release.branches, affected.branch);
-	const warnings = [
-		...affected.warnings,
-		...lineWarnings(workspace, affected.branch, line),
-		...facts.warnings,
-		...releaseAsWarnings(workspace.units, facts.ranges),
-	];
+	git: GitReader,
+	opts: PlanOptions,
+): Promise<PlanResult> => {
+	const schemes = validateRelease(workspace);
+	const affected = await computeAffected(workspace, git, opts);
+	const facts = await collectPlanFacts(workspace, git, {
+		head: opts.head,
+		fs: opts.fs,
+		...(opts.debug && { debug: opts.debug }),
+	});
+	const { plan, releases } = resolveReleases(workspace, {
+		affected,
+		facts,
+		schemes,
+		all: opts.all ?? false,
+	});
 
-	const rank = new Map(workspace.graph.order.map((id, i) => [id, i]));
-	const ordered = [...workspace.units].sort(
-		(a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
-	);
-	const hits = new Map(affected.units.map((u) => [u.id, u]));
-	const factsById = new Map(facts.units.map((f) => [f.id, f]));
-	const inputs = releaseInputs(workspace, input, line?.channel ?? null);
-	const intents = new Map<string, UnitIntent<unknown>>(
-		[...inputs].map(([id, i]) => [id, unitIntent(i, warnings)]),
-	);
-	const propagated = propagate(
-		workspace.graph,
-		workspace.units,
-		new Map(
-			[...intents].map(([id, i]) => [
-				id,
-				{ bump: i.bump, pending: i.bump !== null || i.releaseAs !== undefined },
-			]),
-		),
-	);
-
-	const units: UnitPlan[] = [];
-	for (const unit of ordered) {
-		const { id } = unit;
-		const unitInput = inputs.get(id);
-		const intent = intents.get(id);
-		const state = propagated.get(id);
-		const release =
-			unitInput && intent
-				? releaseUnit(
-						unitInput,
-						{ bump: state?.bump ?? intent.bump, releaseAs: intent.releaseAs },
-						warnings,
-					)
-				: undefined;
-		const entry = unitPlan(
-			{
-				unit,
-				hit: hits.get(id),
-				facts: factsById.get(id),
-				intent,
-				release,
-				propagatedFrom: state?.propagatedFrom ?? [],
-				head: facts.head,
-			},
-			input.all,
-		);
-		if (entry) {
-			units.push(entry);
-		}
-	}
-
-	warnings.push(...noMatchingTag(workspace, facts));
-
-	return { ...doc, line, units, groups: [], released: [], warnings };
+	return { plan, facts, releases };
 };
 
 /**
@@ -360,21 +374,6 @@ export const computePlan = async (
 	workspace: Workspace,
 	git: GitReader,
 	opts: PlanOptions,
-): Promise<Plan> => {
-	const schemes = validateRelease(workspace);
-	const affected = await computeAffected(workspace, git, opts);
-	const facts = await collectPlanFacts(workspace, git, {
-		head: opts.head,
-		fs: opts.fs,
-		...(opts.debug && { debug: opts.debug }),
-	});
-
-	return resolvePlan(workspace, {
-		affected,
-		facts,
-		schemes,
-		all: opts.all ?? false,
-	});
-};
+): Promise<Plan> => (await planWithFacts(workspace, git, opts)).plan;
 
 export type { Line as PlanLine } from "./branches.js";
