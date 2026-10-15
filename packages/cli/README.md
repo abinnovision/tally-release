@@ -27,13 +27,21 @@ units:
 
 Units are build-only unless opted in with `release: true` (per unit) or `defaults.release: true`.
 
+Tags label units so CI can split the build set by kind:
+
+```yaml
+units:
+  apps/web: { tags: [docker] }
+  packages/api: { release: true, tags: [npm] }
+```
+
 ## Commands
 
 Global flags: `--cwd <dir>` (repository root), `--config <file>` (default `tallyrelease.yaml`), `--token <token>` (forge token, default `GITHUB_TOKEN`), `--verbose`.
 
 - `tallyrelease check` validates config, plugins, units and graph.
 - `tallyrelease graph [--format text|json|mermaid] [--json]` prints units and edges.
-- `tallyrelease affected [--base <ref>] [--format text|json|tsv] [--json] [--out <file>] [--github-output]` computes the build set. `--out` writes the affected document as JSON, `--github-output` appends outputs to `$GITHUB_OUTPUT`.
+- `tallyrelease affected [--base <ref>] [--format text|json|tsv] [--json] [--out <file>] [--github-output] [--tag <tag>]` computes the build set. `--out` writes the affected document as JSON, `--github-output` appends outputs to `$GITHUB_OUTPUT`. `--tag` (repeatable) keeps units with any of the given tags.
 
 Exit codes: `0` ok, `1` error, `2` usage. For scripts use `--format tsv` or `--json`; the text layout may change between versions.
 
@@ -56,6 +64,33 @@ steps:
 ```
 
 The job needs `actions: read` for the base lookup.
+
+The `affected` output is a JSON array of `{id, path, plugin, reason, released, tags}` and works as a matrix:
+
+```yaml
+jobs:
+  affected:
+    runs-on: ubuntu-latest
+    outputs:
+      docker: ${{ steps.docker.outputs.affected }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: docker
+        run: npx @tallyrelease/cli affected --tag docker --github-output
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+  image:
+    needs: affected
+    if: needs.affected.outputs.docker != '[]'
+    strategy:
+      matrix:
+        unit: ${{ fromJSON(needs.affected.outputs.docker) }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "build ${{ matrix.unit.id }} from ${{ matrix.unit.path }}"
+```
 
 ## Editor support
 

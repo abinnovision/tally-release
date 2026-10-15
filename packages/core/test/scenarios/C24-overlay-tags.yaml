@@ -1,0 +1,26 @@
+description: Overlay tags are sorted and deduplicated, also on config-only units; the default is none.
+config:
+  plugins: { stub: {} }
+  units:
+    apps/web: { release: true, tags: [npm, docker, docker] }
+    infra/tf: { id: tf, tags: [terraform] }
+plugins:
+  - name: stub
+    units:
+      - { id: web, root: apps/web }
+      - { id: ui, root: libs/ui }
+git:
+  commits:
+    - id: c0
+      files: { apps/web/a.ts: "1", libs/ui/a.ts: "1", infra/tf/main.tf: "1" }
+base: null
+expect:
+  units:
+    - { id: tf, plugin: config, tags: [terraform] }
+    - { id: ui, tags: [] }
+    - { id: web, tags: [docker, npm] }
+  affected:
+    units:
+      - { id: tf, released: false, tags: [terraform] }
+      - { id: ui, released: false, tags: [] }
+      - { id: web, released: true, tags: [docker, npm] }

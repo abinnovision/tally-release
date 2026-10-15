@@ -2,7 +2,7 @@ import { attribution, matcher } from "./attribution.js";
 import { uniqueSorted } from "./util.js";
 
 import type { Warning } from "./errors.js";
-import type { GitReader } from "./plugin.js";
+import type { GitReader, Unit } from "./plugin.js";
 import type { Workspace } from "./workspace.js";
 
 export type BaseSource =
@@ -24,6 +24,10 @@ export interface AffectedUnit {
 	reason: AffectedReason;
 	/** Affected direct dependencies that made a dependent affected. */
 	via: string[];
+	/** True unless the unit's version is `none`. */
+	released: boolean;
+	/** Sorted unit tags. */
+	tags: string[];
 }
 
 /** `tallyrelease affected --json`, schema 1. */
@@ -76,14 +80,21 @@ export const computeAffected = async (
 		unattributed,
 		warnings: [...workspace.warnings],
 	});
+	const entry = (
+		u: Unit,
+		reason: AffectedReason,
+		via: string[],
+	): AffectedUnit => ({
+		id: u.id,
+		path: u.root,
+		plugin: u.plugin,
+		reason,
+		via,
+		released: u.version !== "none",
+		tags: [...u.tags],
+	});
 	const everything = (reason: AffectedReason): AffectedUnit[] =>
-		units.map((u) => ({
-			id: u.id,
-			path: u.root,
-			plugin: u.plugin,
-			reason,
-			via: [],
-		}));
+		units.map((u) => entry(u, reason, []));
 
 	if (opts.base === null) {
 		return doc(everything("all"), { all: true, globalInputs: [] }, []);
@@ -135,19 +146,15 @@ export const computeAffected = async (
 
 	const result = units
 		.filter((u) => affected.has(u.id))
-		.map((u): AffectedUnit => {
-			const isDirect = direct.has(u.id);
-
-			return {
-				id: u.id,
-				path: u.root,
-				plugin: u.plugin,
-				reason: isDirect ? "direct" : "dependent",
-				via: isDirect
-					? []
-					: (graph.dependencies.get(u.id) ?? []).filter((d) => affected.has(d)),
-			};
-		});
+		.map((u) =>
+			direct.has(u.id)
+				? entry(u, "direct", [])
+				: entry(
+						u,
+						"dependent",
+						(graph.dependencies.get(u.id) ?? []).filter((d) => affected.has(d)),
+					),
+		);
 
 	return doc(
 		result,

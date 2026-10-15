@@ -1,12 +1,13 @@
 import { TallyError } from "./errors.js";
 import { defaultUnitId } from "./plugin.js";
 import { runHook } from "./plugins.js";
-import { compare } from "./util.js";
+import { compare, uniqueSorted } from "./util.js";
 
 import type { Unit, UnitDraft } from "./plugin.js";
 import type { ActivePlugin, PluginEnv } from "./plugins.js";
 
 const UNIT_ID = /^(?!\.\.?$)[A-Za-z0-9._-]+$/;
+const UNIT_TAG = /^[A-Za-z0-9._-]+$/;
 
 interface Entry {
 	plugin: string;
@@ -14,6 +15,8 @@ interface Entry {
 	meta: Record<string, Readonly<Record<string, unknown>>>;
 	/** From the config overlay only. */
 	release?: boolean | undefined;
+	/** From the config overlay only. */
+	tags?: string[] | undefined;
 }
 
 /** Drops `.` and empty segments; rejects absolute roots and `..` segments. */
@@ -74,14 +77,24 @@ export const discoverUnits = async (
 		}
 	}
 
-	for (const [key, { release, ...overlay }] of Object.entries(
+	for (const [key, { release, tags, ...overlay }] of Object.entries(
 		env.config.units ?? {},
 	)) {
 		const root = normalizeRoot(key);
+		const invalid = tags?.find((t) => !UNIT_TAG.test(t));
+		if (invalid !== undefined) {
+			throw new TallyError(
+				"E_UNIT_TAG",
+				`tag "${invalid}" of unit at "${root}" must match ${UNIT_TAG.source}`,
+				{ tag: invalid, root },
+			);
+		}
+
 		const entry = byRoot.get(root);
 		if (entry) {
 			entry.draft = { ...entry.draft, ...overlay };
 			entry.release = release;
+			entry.tags = tags;
 		} else {
 			byRoot.set(root, {
 				plugin: "config",
@@ -92,6 +105,7 @@ export const discoverUnits = async (
 				},
 				meta: {},
 				release,
+				tags,
 			});
 		}
 	}
@@ -136,7 +150,7 @@ export const discoverUnits = async (
 	const { defaults } = env.config;
 
 	return [...byId.values()]
-		.map(({ plugin, draft, meta, release }): Unit => {
+		.map(({ plugin, draft, meta, release, tags }): Unit => {
 			const { root } = draft;
 			const nested = roots
 				.filter((r) => isInside(r, root))
@@ -162,6 +176,7 @@ export const discoverUnits = async (
 					defaults?.tagFormat ??
 					(root === "." ? "v{version}" : "{id}-v{version}"),
 				propagate: draft.propagate ?? defaults?.propagate ?? "auto",
+				tags: Object.freeze(uniqueSorted(tags ?? [])),
 				meta: Object.freeze(meta),
 			});
 		})

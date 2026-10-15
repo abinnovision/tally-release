@@ -91,6 +91,27 @@ describe("graph", () => {
 		expect(empty).toEqual({ code: 0, stdout: "no units\n", stderr: "" });
 	});
 
+	it("shows tags only when a unit has them", async () => {
+		const tagged = {
+			"tallyrelease.yaml": "units:\n  a: { tags: [npm, docker] }\n  b: {}\n",
+			"a/x": "",
+			"b/x": "",
+		};
+		expect((await graph(tagged)).stdout).toContain(
+			[
+				"UNIT  PATH  PLUGIN  RELEASE  TAGS",
+				"a     a     config  -        docker,npm",
+				"b     b     config  -",
+				"",
+			].join("\n"),
+		);
+
+		const json = JSON.parse((await graph(tagged, "--json")).stdout) as {
+			units: { tags: string[] }[];
+		};
+		expect(json.units.map((u) => u.tags)).toEqual([["docker", "npm"], []]);
+	});
+
 	it("--format json equals --json (G19)", async () => {
 		const viaFormat = await graph(files, "--format", "json");
 		const viaFlag = await graph(files, "--json");

@@ -17,6 +17,7 @@ const unit = (id: string, root: string, packageName: string): Unit => ({
 	scheme: "semver",
 	tagFormat: "",
 	propagate: "auto",
+	tags: [],
 	meta: { node: { packageName } },
 });
 

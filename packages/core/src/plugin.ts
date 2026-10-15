@@ -105,6 +105,8 @@ export interface Unit {
 	readonly scheme: string;
 	readonly tagFormat: string;
 	readonly propagate: Propagate;
+	/** From the config overlay; sorted, unique. */
+	readonly tags: readonly string[];
 	readonly meta: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 

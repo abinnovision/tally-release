@@ -54,6 +54,13 @@ const unitOverlay = z.strictObject({
 		.exactOptional(),
 	tagFormat: tagFormat.exactOptional(),
 	propagate: propagate.exactOptional(),
+	tags: z
+		.array(z.string().regex(/^[A-Za-z0-9._-]+$/))
+		.meta({
+			description:
+				"Labels for filtering with affected --tag (letters, digits, dot, underscore, dash), for example docker or npm.",
+		})
+		.exactOptional(),
 });
 
 /** Schema of `tallyrelease.yaml`. */

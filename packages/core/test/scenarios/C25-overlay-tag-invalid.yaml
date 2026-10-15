@@ -1,0 +1,13 @@
+description: A tag outside the unit id character set is rejected.
+config:
+  plugins: {}
+  units:
+    packages/a: { tags: [ok, "not ok"] }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "1" }
+base: null
+error:
+  code: E_UNIT_TAG
+  details: { tag: "not ok", root: packages/a }

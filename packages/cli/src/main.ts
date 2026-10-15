@@ -70,6 +70,11 @@ export const main = async (
 		)
 		.option("--out <file>", "write the affected document to a file")
 		.option("--github-output", "append outputs to $GITHUB_OUTPUT")
+		.option(
+			"--tag <tag>",
+			"keep units with this tag (repeatable)",
+			(tag: string, prior?: string[]) => [...(prior ?? []), tag],
+		)
 		.action(async (flags: AffectedFlags, cmd: Command) => {
 			if (flags.json && flags.format !== undefined) {
 				cmd.error("--json and --format cannot be combined", { exitCode: 2 });
