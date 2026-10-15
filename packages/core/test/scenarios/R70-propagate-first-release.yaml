@@ -1,0 +1,37 @@
+description: >-
+  Propagation onto a released unit without tags is its first release at the
+  initial version.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+    edges:
+      - { from: a, to: b, reason: dependencies, pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, initialVersion: 0.1.0 }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, bump: patch, next: 1.0.1 }
+      - id: b
+        baseTag: null
+        from: null
+        bump: patch
+        propagatedFrom: [a]
+        next: 0.1.0
+    warnings: []

@@ -1,7 +1,13 @@
 import { computeAffected } from "./affected.js";
 import { matchBranch } from "./branches.js";
 import { collectPlanFacts } from "./facts.js";
-import { releaseAsWarnings, releaseUnit } from "./release.js";
+import { propagate } from "./propagate.js";
+import {
+	reach,
+	releaseAsWarnings,
+	releaseUnit,
+	unitIntent,
+} from "./release.js";
 import { validateRelease } from "./validate.js";
 
 import type {
@@ -20,7 +26,7 @@ import type {
 	Unit,
 	VersionScheme,
 } from "./plugin.js";
-import type { UnitRelease } from "./release.js";
+import type { ReleaseInput, UnitIntent, UnitRelease } from "./release.js";
 import type { Workspace } from "./workspace.js";
 
 /**
@@ -78,15 +84,12 @@ const lineWarnings = (
 		: [];
 };
 
-const planChanges = (
-	facts: UnitFacts | undefined,
-	release: UnitRelease,
-): PlanChange[] =>
-	(facts?.changes ?? []).map(({ change }) => {
+const planChanges = (intent: UnitIntent<unknown> | undefined): PlanChange[] =>
+	(intent?.changes ?? []).map(({ change, via }) => {
 		const releaseAs =
 			change.sha === undefined
 				? undefined
-				: release.releaseAsBySha.get(change.sha);
+				: intent?.releaseAsBySha.get(change.sha);
 
 		return {
 			...(change.sha === undefined ? {} : { sha: change.sha }),
@@ -95,15 +98,54 @@ const planChanges = (
 			...(change.scope === undefined ? {} : { scope: change.scope }),
 			subject: change.subject,
 			...(change.pr === undefined ? {} : { pr: change.pr }),
+			...(via === undefined ? {} : { via }),
 			...(releaseAs === undefined ? {} : { releaseAs }),
 		};
 	});
+
+/**
+ * Release inputs of the released units with a scheme and range; the same set
+ * bounds absorption here and propagation in `resolvePlan`.
+ */
+const releaseInputs = (
+	workspace: Workspace,
+	{ facts, schemes }: Pick<ResolveInput, "facts" | "schemes">,
+	channel: string | null,
+): Map<string, ReleaseInput<any>> => {
+	const units = new Map(workspace.units.map((u) => [u.id, u]));
+	const entries = facts.units.flatMap((unitFacts) => {
+		const unit = units.get(unitFacts.id);
+		const scheme = unit && schemes.get(unit.scheme);
+		const range = facts.ranges.find((r) => r.from === unitFacts.from);
+
+		return unit && scheme && range ? [{ unit, scheme, unitFacts, range }] : [];
+	});
+	const released = new Set(entries.map((e) => e.unit.id));
+
+	return new Map(
+		entries.map(({ unit, scheme, unitFacts, range }) => [
+			unit.id,
+			{
+				unit,
+				scheme,
+				settings: workspace.release,
+				facts: unitFacts,
+				range,
+				absorbed: reach(unit.id, workspace.graph.dependencies, released),
+				head: facts.head,
+				channel,
+			},
+		]),
+	);
+};
 
 interface Entry {
 	unit: Unit;
 	hit: AffectedUnit | undefined;
 	facts: UnitFacts | undefined;
+	intent: UnitIntent<unknown> | undefined;
 	release: UnitRelease | undefined;
+	propagatedFrom: readonly string[];
 	head: string;
 }
 
@@ -113,7 +155,6 @@ const UNRELEASED: UnitRelease = {
 	releaseAs: null,
 	next: null,
 	prerelease: null,
-	releaseAsBySha: new Map(),
 };
 
 /** The unit's plan entry; undefined when it is not listed. */
@@ -141,12 +182,12 @@ const unitPlan = (entry: Entry, all: boolean): UnitPlan | undefined => {
 		from: release.from,
 		bump: release.bump,
 		releaseAs: release.releaseAs,
-		propagatedFrom: [],
-		absorbedFrom: [],
+		propagatedFrom: [...entry.propagatedFrom],
+		absorbedFrom: [...(entry.intent?.absorbedFrom ?? [])],
 		next: release.next,
 		version: kind === "prerelease" ? prerelease : null,
 		sha: entry.head,
-		changes: planChanges(facts, release),
+		changes: planChanges(entry.intent),
 	};
 };
 
@@ -244,7 +285,7 @@ export const resolvePlan = (
 	workspace: Workspace,
 	input: ResolveInput,
 ): Plan => {
-	const { affected, facts, schemes } = input;
+	const { affected, facts } = input;
 	const { units: _, ...doc } = affected;
 	const line = matchBranch(workspace.release.branches, affected.branch);
 	const warnings = [
@@ -260,30 +301,45 @@ export const resolvePlan = (
 	);
 	const hits = new Map(affected.units.map((u) => [u.id, u]));
 	const factsById = new Map(facts.units.map((f) => [f.id, f]));
+	const inputs = releaseInputs(workspace, input, line?.channel ?? null);
+	const intents = new Map<string, UnitIntent<unknown>>(
+		[...inputs].map(([id, i]) => [id, unitIntent(i, warnings)]),
+	);
+	const propagated = propagate(
+		workspace.graph,
+		workspace.units,
+		new Map(
+			[...intents].map(([id, i]) => [
+				id,
+				{ bump: i.bump, pending: i.bump !== null || i.releaseAs !== undefined },
+			]),
+		),
+	);
+
 	const units: UnitPlan[] = [];
 	for (const unit of ordered) {
 		const { id } = unit;
-		const unitFacts = factsById.get(id);
-		const scheme = schemes.get(unit.scheme);
-		const range = facts.ranges.find((r) => r.from === unitFacts?.from);
-
+		const unitInput = inputs.get(id);
+		const intent = intents.get(id);
+		const state = propagated.get(id);
 		const release =
-			unitFacts && scheme && range
+			unitInput && intent
 				? releaseUnit(
-						{
-							unit,
-							scheme,
-							settings: workspace.release,
-							facts: unitFacts,
-							range,
-							head: facts.head,
-							channel: line?.channel ?? null,
-						},
+						unitInput,
+						{ bump: state?.bump ?? intent.bump, releaseAs: intent.releaseAs },
 						warnings,
 					)
 				: undefined;
 		const entry = unitPlan(
-			{ unit, hit: hits.get(id), facts: unitFacts, release, head: facts.head },
+			{
+				unit,
+				hit: hits.get(id),
+				facts: factsById.get(id),
+				intent,
+				release,
+				propagatedFrom: state?.propagatedFrom ?? [],
+				head: facts.head,
+			},
 			input.all,
 		);
 		if (entry) {

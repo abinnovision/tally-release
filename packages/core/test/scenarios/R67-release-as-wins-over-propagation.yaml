@@ -1,0 +1,40 @@
+description: >-
+  Release-As is the explicit target of an ungrouped unit: propagation raises
+  its bump and lists the source, but next stays the Release-As value.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+    edges:
+      - { from: a, to: b, reason: dependencies, pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore: b\n\nRelease-As: 2.0.0"
+      files: { packages/b/index.ts: "2" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.4.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, bump: minor, next: 1.1.0 }
+      - id: b
+        bump: patch
+        releaseAs: 2.0.0
+        propagatedFrom: [a]
+        next: 2.0.0
+    warnings: []

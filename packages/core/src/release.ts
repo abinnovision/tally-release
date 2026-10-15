@@ -1,9 +1,15 @@
+import { maxLevel, uniqueSorted } from "./util.js";
+
 import type { TallyConfig } from "./config.js";
 import type { Warning } from "./errors.js";
 import type { AttributedChange, RangeFacts, UnitFacts } from "./facts.js";
-import type { BumpLevel, PreCtx, Unit, VersionScheme } from "./plugin.js";
-
-const LEVELS: readonly BumpLevel[] = ["patch", "minor", "major"];
+import type {
+	BumpLevel,
+	Change,
+	PreCtx,
+	Unit,
+	VersionScheme,
+} from "./plugin.js";
 
 const DEFAULT_TYPES: Readonly<Record<string, BumpLevel>> = {
 	feat: "minor",
@@ -11,12 +17,6 @@ const DEFAULT_TYPES: Readonly<Record<string, BumpLevel>> = {
 	perf: "patch",
 	revert: "patch",
 };
-
-const maxLevel = (
-	a: BumpLevel | null,
-	b: BumpLevel | null,
-): BumpLevel | null =>
-	a === null || (b !== null && LEVELS.indexOf(b) > LEVELS.indexOf(a)) ? b : a;
 
 interface CommitValues {
 	sha?: string;
@@ -118,24 +118,44 @@ const pickReleaseAs = <V>(
 /**
  * Max level over the changes. While the major is 0, breaking changes use
  * `preMajor.breaking` and changes whose type level is minor `preMajor.feat`.
+ * Absorbed changes are capped at minor.
  */
 const ownBump = (
-	changes: readonly AttributedChange[],
+	changes: readonly UnitChange[],
 	settings: ReleaseSettings,
 	preMajor: boolean,
 ): BumpLevel | null =>
-	changes.reduce<BumpLevel | null>((bump, { change }) => {
-		if (change.breaking) {
-			return maxLevel(bump, preMajor ? settings.preMajor.breaking : "major");
-		}
-
-		const level = settings.bumps.get(change.type) ?? null;
+	changes.reduce<BumpLevel | null>((bump, { change, via }) => {
+		const typed = settings.bumps.get(change.type) ?? null;
+		const level = change.breaking
+			? preMajor
+				? settings.preMajor.breaking
+				: "major"
+			: preMajor && typed === "minor"
+				? settings.preMajor.feat
+				: typed;
 
 		return maxLevel(
 			bump,
-			preMajor && level === "minor" ? settings.preMajor.feat : level,
+			via !== undefined && level === "major" ? "minor" : level,
 		);
 	}, null);
+
+/** Changes of the range attributed to the unit or to an absorbed unit. */
+const unitChanges = (
+	id: string,
+	range: RangeFacts,
+	absorbed: ReadonlySet<string>,
+): UnitChange[] =>
+	range.changes.flatMap(({ change, units }) => {
+		if (units.includes(id)) {
+			return [{ change }];
+		}
+
+		const via = units.find((u) => absorbed.has(u));
+
+		return via === undefined ? [] : [{ change, via }];
+	});
 
 /** Warns when a first release's initial version is not above the unit's highest prerelease tag. */
 const initialBelowPrerelease = <V>(
@@ -180,6 +200,15 @@ const appliedValue = <V>(
 	return undefined;
 };
 
+const fromOf = <V>(scheme: VersionScheme<V>, facts: UnitFacts) => {
+	const base = facts.baseTag;
+	const version = base === null ? undefined : scheme.parse(base.version);
+
+	return base === null || version === undefined
+		? undefined
+		: { raw: base.version, version };
+};
+
 /** A normalized branch rule. */
 export interface BranchRule {
 	readonly name: string;
@@ -197,6 +226,28 @@ export interface ReleaseSettings {
 	readonly branches: readonly BranchRule[];
 }
 
+/**
+ * A Change of a released unit; `via` names the first absorbed unit (by id) a
+ * change not attributed to the unit came through.
+ */
+export interface UnitChange {
+	readonly change: Change;
+	readonly via?: string;
+}
+
+/** Bump inputs of a released unit, before propagation. */
+export interface UnitIntent<V> {
+	/** Own and absorbed level. */
+	readonly bump: BumpLevel | null;
+	readonly releaseAs: V | undefined;
+	/** Core commit order. */
+	readonly changes: readonly UnitChange[];
+	/** Absorbed units of the changes with `via`, sorted. */
+	readonly absorbedFrom: readonly string[];
+	/** Release-As value per commit sha, for the plan's change list. */
+	readonly releaseAsBySha: ReadonlyMap<string, string>;
+}
+
 export interface UnitRelease {
 	readonly from: string | null;
 	readonly bump: BumpLevel | null;
@@ -205,8 +256,6 @@ export interface UnitRelease {
 	readonly next: string | null;
 	/** Prerelease of `next` on `channel`; null without a channel or `next`. */
 	readonly prerelease: string | null;
-	/** Release-As value per commit sha, for the plan's change list. */
-	readonly releaseAsBySha: ReadonlyMap<string, string>;
 }
 
 export interface ReleaseInput<V> {
@@ -216,9 +265,34 @@ export interface ReleaseInput<V> {
 	readonly facts: UnitFacts;
 	/** The range of `facts.from`. */
 	readonly range: RangeFacts;
+	/** Unreleased units absorbed by the unit (`reach`). */
+	readonly absorbed: ReadonlySet<string>;
 	readonly head: string;
 	readonly channel: string | null;
 }
+
+/**
+ * Unreleased units reachable over `id`'s dependencies, never stepping into or
+ * through a released unit.
+ */
+export const reach = (
+	id: string,
+	dependencies: ReadonlyMap<string, readonly string[]>,
+	released: ReadonlySet<string>,
+): Set<string> => {
+	const found = new Set<string>();
+	const queue = [id];
+	for (const v of queue) {
+		for (const w of dependencies.get(v) ?? []) {
+			if (!released.has(w) && !found.has(w)) {
+				found.add(w);
+				queue.push(w);
+			}
+		}
+	}
+
+	return found;
+};
 
 /** Applies the defaults to `bumps` and `branches`. */
 export const releaseSettings = (config: TallyConfig): ReleaseSettings => ({
@@ -280,29 +354,57 @@ export const releaseAsWarnings = (
 };
 
 /**
- * Own bump, Release-As and first release of a released unit. Release-As
- * values are read newest first (core commit order); a single leading `v` is
- * stripped, as release-please does.
+ * Own and absorbed bump and Release-As of a released unit. Release-As values
+ * are read newest first (core commit order); a single leading `v` is
+ * stripped, as release-please does. Footers are not absorbed.
+ */
+export const unitIntent = <V>(
+	input: ReleaseInput<V>,
+	warnings: Warning[],
+): UnitIntent<V> => {
+	const { unit, scheme, facts } = input;
+	const from = fromOf(scheme, facts);
+	const changes = unitChanges(unit.id, input.range, input.absorbed);
+	const commits = commitValues(unit.id, input.range.changes);
+
+	return {
+		bump: ownBump(
+			changes,
+			input.settings,
+			from !== undefined && scheme.core(from.version).major === 0,
+		),
+		releaseAs: pickReleaseAs({ unit, scheme, from, commits }, warnings),
+		changes,
+		absorbedFrom: uniqueSorted(
+			input.range.changes.flatMap(({ units }) =>
+				units.includes(unit.id)
+					? []
+					: units.filter((u) => input.absorbed.has(u)),
+			),
+		),
+		releaseAsBySha: new Map(
+			commits.flatMap(({ sha, values }) => {
+				const value = appliedValue(scheme, values);
+
+				return sha === undefined || value === undefined ? [] : [[sha, value]];
+			}),
+		),
+	};
+};
+
+/**
+ * `next` and prerelease of a released unit from its bump after propagation;
+ * Release-As overrides `next`.
  */
 export const releaseUnit = <V>(
 	input: ReleaseInput<V>,
+	intent: { bump: BumpLevel | null; releaseAs: V | undefined },
 	warnings: Warning[],
 ): UnitRelease => {
 	const { unit, scheme, facts } = input;
+	const { bump, releaseAs } = intent;
 	const base = facts.baseTag;
-	const fromVersion = base === null ? undefined : scheme.parse(base.version);
-	const from =
-		base === null || fromVersion === undefined
-			? undefined
-			: { raw: base.version, version: fromVersion };
-	const bump = ownBump(
-		facts.changes,
-		input.settings,
-		from !== undefined && scheme.core(from.version).major === 0,
-	);
-
-	const commits = commitValues(unit.id, input.range.changes);
-	const releaseAs = pickReleaseAs({ unit, scheme, from, commits }, warnings);
+	const from = fromOf(scheme, facts);
 	const initial =
 		(unit.initialVersion === null
 			? undefined
@@ -336,12 +438,5 @@ export const releaseUnit = <V>(
 			raw === undefined || channel === null
 				? null
 				: scheme.format(scheme.prerelease(raw, { ...ctx, channel })),
-		releaseAsBySha: new Map(
-			commits.flatMap(({ sha, values }) => {
-				const value = appliedValue(scheme, values);
-
-				return sha === undefined || value === undefined ? [] : [[sha, value]];
-			}),
-		),
 	};
 };

@@ -1,0 +1,57 @@
+description: >-
+  A path through unreleased units acts as an edge between released units with
+  the first hop's pinned.
+plugins:
+  - name: stub
+    units:
+      - { id: core, root: packages/core }
+      - { id: adapter, root: packages/adapter }
+      - { id: shim, root: packages/shim }
+      - { id: app, root: apps/app }
+      - { id: web, root: apps/web }
+    edges:
+      - { from: core, to: adapter, reason: dependencies, pinned: true }
+      - { from: adapter, to: app, reason: dependencies, pinned: false }
+      - { from: core, to: shim, reason: dependencies, pinned: false }
+      - { from: shim, to: web, reason: dependencies, pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/adapter: { release: false }
+    packages/shim: { release: false }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/core/index.ts: "0"
+        packages/adapter/index.ts: "0"
+        packages/shim/index.ts: "0"
+        apps/app/index.ts: "0"
+        apps/web/index.ts: "0"
+    - id: c1
+      message: "fix: core"
+      files: { packages/core/index.ts: "1" }
+  tags:
+    - { name: core-v1.0.0, commit: c0 }
+    - { name: app-v1.0.0, commit: c0 }
+    - { name: web-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: core, bump: patch, next: 1.0.1 }
+      - { id: adapter, bump: null, next: null, propagatedFrom: [] }
+      - {
+          id: app,
+          bump: patch,
+          next: 1.0.1,
+          propagatedFrom: [core],
+          absorbedFrom: [],
+        }
+      - { id: shim, bump: null, next: null }
+      - { id: web, bump: null, next: null, propagatedFrom: [] }
+    warnings: []

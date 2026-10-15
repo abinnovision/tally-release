@@ -1,0 +1,40 @@
+description: >-
+  Pinned edges (workspace:*) patch dependents; a propagated patch propagates
+  further along a pinned chain.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+    edges:
+      - { from: a, to: b, reason: "dependencies: workspace:*", pinned: true }
+      - { from: b, to: c, reason: "dependencies: workspace:*", pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v2.0.0, commit: c0 }
+    - { name: c-v3.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, kind: rebuild, next: 1.0.1, propagatedFrom: [] }
+      - { id: b, kind: rebuild, bump: patch, next: 2.0.1, propagatedFrom: [a] }
+      - { id: c, kind: rebuild, bump: patch, next: 3.0.1, propagatedFrom: [b] }
+    warnings: []

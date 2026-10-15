@@ -1,0 +1,38 @@
+description: >-
+  An absorbed chore is listed with via but bumps nothing.
+plugins:
+  - name: stub
+    units:
+      - { id: app, root: apps/app }
+      - { id: tsconfig, root: packages/tsconfig }
+    edges:
+      - { from: tsconfig, to: app, reason: devDependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  units:
+    apps/app: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { apps/app/index.ts: "0", packages/tsconfig/base.json: "0" }
+    - id: c1
+      message: "chore: tsconfig"
+      files: { packages/tsconfig/base.json: "1" }
+  tags:
+    - { name: app-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: tsconfig, kind: rebuild }
+      - id: app
+        kind: rebuild
+        bump: null
+        absorbedFrom: [tsconfig]
+        next: null
+        version: null
+        changes: [{ sha: c1, type: chore, via: tsconfig }]
+    warnings: []

@@ -1,0 +1,50 @@
+description: >-
+  Absorption never steps into or through a released unit; the released
+  dependency absorbs the change and propagates per policy.
+plugins:
+  - name: stub
+    units:
+      - { id: app, root: apps/app }
+      - { id: lib, root: packages/lib }
+      - { id: db, root: packages/db }
+    edges:
+      - { from: db, to: lib, reason: dependencies, pinned: false }
+      - { from: lib, to: app, reason: "dependencies: ^1.0.0", pinned: false }
+config:
+  plugins: { stub: {} }
+  units:
+    apps/app: { release: true }
+    packages/lib: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        apps/app/index.ts: "0"
+        packages/lib/index.ts: "0"
+        packages/db/index.ts: "0"
+    - id: c1
+      message: "fix: db"
+      files: { packages/db/index.ts: "1" }
+  tags:
+    - { name: app-v1.0.0, commit: c0 }
+    - { name: lib-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: db, bump: null }
+      - id: lib
+        bump: patch
+        absorbedFrom: [db]
+        next: 1.0.1
+        changes: [{ sha: c1, via: db }]
+      - id: app
+        bump: null
+        absorbedFrom: []
+        propagatedFrom: []
+        next: null
+        changes: []
+    warnings: []
