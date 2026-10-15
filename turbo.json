@@ -26,6 +26,7 @@
 		"sort:fix": {},
 		"sort:check": {},
 		"build": {
+			"dependsOn": ["^build"],
 			"inputs": ["src/**/*"],
 			"outputs": ["dist/**/*"]
 		},
