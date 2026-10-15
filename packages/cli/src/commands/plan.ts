@@ -3,7 +3,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { baseLabel, baseLine, resolveBuildBase } from "../ci/base.js";
-import { planGithubOutput } from "../ci/outputs.js";
+import { planGithubOutput, releasesGithubOutput } from "../ci/outputs.js";
 import { appendStepSummary } from "../ci/summary.js";
 import { alignColumns } from "../output/columns.js";
 import { count } from "../output/count.js";
@@ -13,6 +13,7 @@ import { repoRef } from "./effects.js";
 import { version } from "../version.js";
 
 import type { BuildBase } from "../ci/base.js";
+import type { ReleaseEntry } from "../plan-schema.js";
 import type { Session } from "../session.js";
 import type {
 	Plan,
@@ -240,7 +241,11 @@ export const releasedPrs = async (
 /** Writes `doc` to `--out`, `$GITHUB_OUTPUT`, the step summary and stdout. */
 export const writePlan = (
 	session: Session,
-	{ doc, base }: { doc: Plan; base: BuildBase },
+	{
+		doc,
+		base,
+		releases,
+	}: { doc: Plan; base: BuildBase; releases?: readonly ReleaseEntry[] },
 	flags: Pick<
 		PlanFlags,
 		"format" | "json" | "out" | "githubOutput" | "summary"
@@ -275,7 +280,11 @@ export const writePlan = (
 			writeFileSync(path, json);
 		}
 
-		appendFileSync(outputPath, planGithubOutput(path));
+		appendFileSync(
+			outputPath,
+			planGithubOutput(path) +
+				(releases === undefined ? "" : releasesGithubOutput(releases)),
+		);
 	}
 
 	const appended =

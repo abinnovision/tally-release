@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
 	fakeForge,
@@ -11,7 +12,7 @@ import {
 import { removeTmpDirs, tmpDir } from "./harness/git-repo.js";
 import { memoryRepo } from "./harness/memory-repo.js";
 import { actionsEnv, runCli } from "./harness/run-cli.js";
-import { planSchema } from "../../src/plan-schema.js";
+import { planSchema, releaseEntrySchema } from "../../src/plan-schema.js";
 
 import type { RunOptions } from "./harness/run-cli.js";
 import type { Dag } from "@tallyrelease/core/testing";
@@ -73,9 +74,9 @@ const push = (before: string) => ({ name: "push", payload: { before } });
  * Remote with `main` at the dag's HEAD and a release PR for a and b opened by
  * `pr`; `runs` are the head shas of successful runs, newest first.
  */
-const setup = async () => {
+const setup = async (start: Dag = dag) => {
 	const remote = memoryRemote();
-	remote.branches.set("main", tip(dag));
+	remote.branches.set("main", tip(start));
 	const runs: string[] = [];
 	const forge = fakeForge(runs, remote);
 	const cli = async (args: string[], runDag: Dag, opts: RunOptions = {}) => {
@@ -91,7 +92,7 @@ const setup = async () => {
 		});
 	};
 
-	await cli(["pr"], dag);
+	await cli(["pr"], start);
 
 	const merge = (before: Dag): Dag => {
 		const merged = mergePr(before, remote, 1);
@@ -305,6 +306,141 @@ describe("run", () => {
 			'warning[W_EFFECT_SKIPPED]: run does nothing on branch "feature" without a line rule\n',
 		);
 		expect(remote.calls).toEqual([]);
+	});
+});
+
+describe("run --github-output", () => {
+	/** The `releases` output of `run` at `runDag`. */
+	const releasesOf = async (
+		harness: Awaited<ReturnType<typeof setup>>,
+		runDag: Dag,
+		before: string,
+	) => {
+		const dir = tmpDir("gh-output");
+		const githubOutput = join(dir, "output");
+		writeFileSync(githubOutput, "");
+		const result = await harness.cli(
+			["run", "--github-output", "--out", join(dir, "plan.json")],
+			runDag,
+			{ event: push(before), env: { GITHUB_OUTPUT: githubOutput } },
+		);
+		expect(result.code).toBe(0);
+		const lines = readFileSync(githubOutput, "utf8").split("\n");
+		const line = lines.find((l) => l.startsWith("releases="));
+
+		return {
+			plan: lines.find((l) => l.startsWith("plan=")),
+			releases: z
+				.array(releaseEntrySchema)
+				.parse(JSON.parse(line?.slice("releases=".length) ?? "null")),
+		};
+	};
+
+	it("lists releases then prereleases, with catch-up and sha (E08, E13)", async () => {
+		const harness = await setup();
+		harness.runs.push("c2");
+		const merged = harness.merge(dag);
+		const later = commit(
+			{
+				...merged,
+				commits: [
+					...merged.commits.map((c, i) =>
+						i === 0
+							? {
+									...c,
+									files: {
+										...c.files,
+										"tallyrelease.yaml": config.replace(
+											"line: default }",
+											"line: default, channel: beta }",
+										),
+									},
+								}
+							: c,
+					),
+					{
+						id: "c5",
+						message: "feat(a): more a",
+						files: { "packages/a/y.ts": "1" },
+					},
+				],
+			},
+			"c6",
+		);
+
+		const { plan, releases } = await releasesOf(harness, later, "merge-1");
+		expect(plan).toMatch(/^plan=.*plan\.json$/u);
+		expect(releases).toMatchObject([
+			{
+				id: "a",
+				kind: "release",
+				tag: "a-v1.1.0",
+				tagPrefix: "a-v",
+				channel: null,
+				releaseSha: "merge-1",
+				sha: "merge-1",
+				catchUp: true,
+				pr: 1,
+			},
+			{ id: "b", kind: "release", tag: "b-v1.1.0", catchUp: true },
+			{
+				id: "a",
+				kind: "prerelease",
+				tag: null,
+				tagPrefix: null,
+				catchUp: false,
+			},
+		]);
+		expect(releases[2]?.releaseSha).toBe(tip(later));
+	});
+
+	it("emits every release again until a run succeeds (E24, E25)", async () => {
+		const harness = await setup();
+		harness.runs.push("c2");
+		const merged = harness.merge(dag);
+		await releasesOf(harness, merged, "c2");
+		const later = commit(merged, "c4");
+
+		const again = await releasesOf(harness, later, "merge-1");
+		expect(again.releases.map((r) => [r.tag, r.catchUp])).toEqual([
+			["a-v1.1.0", true],
+			["b-v1.1.0", true],
+		]);
+	});
+});
+
+describe("run --github-output with several releases of a unit", () => {
+	it("lists them oldest first without a warning (E35)", async () => {
+		// A failed window: b-v1.0.5 at c1 was tagged but never published.
+		const start: Dag = {
+			...dag,
+			tags: [...(dag.tags ?? []), { name: "b-v1.0.5", commit: "c1" }],
+		};
+		const harness = await setup(start);
+		harness.runs.push("c0");
+		const merged = harness.merge(start);
+		const dir = tmpDir("gh-output");
+		const githubOutput = join(dir, "output");
+		writeFileSync(githubOutput, "");
+
+		const result = await harness.cli(
+			["run", "--github-output", "--out", join(dir, "plan.json")],
+			merged,
+			{ event: push("c2"), env: { GITHUB_OUTPUT: githubOutput } },
+		);
+		expect(result).toMatchObject({ code: 0 });
+		expect(result.stderr).not.toContain("SUPERSEDED");
+		const line = readFileSync(githubOutput, "utf8")
+			.split("\n")
+			.find((l) => l.startsWith("releases="));
+		const releases = z
+			.array(releaseEntrySchema)
+			.parse(JSON.parse(line?.slice("releases=".length) ?? "null"));
+		expect(releases.map((r) => [r.tag, r.releaseSha])).toEqual([
+			["b-v1.0.5", "c1"],
+			["a-v1.1.0", "merge-1"],
+			["b-v1.1.0", "merge-1"],
+		]);
 	});
 });
 

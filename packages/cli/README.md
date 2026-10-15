@@ -96,6 +96,43 @@ jobs:
       - run: echo "build ${{ matrix.unit.id }} from ${{ matrix.unit.path }}"
 ```
 
+## Releases in CI
+
+`tallyrelease run [--branch <name>] [--dry-run] [--base <ref>] [--out <file>] [--github-output] [--summary]` is the CI entry point: it reconciles merged release PRs (tags, GitHub releases, labels), plans HEAD, updates the release PRs and writes the plan. `release` and `pr` run the first and last step alone.
+
+With `--github-output`, `run` writes two outputs to `$GITHUB_OUTPUT`:
+
+- `plan`: the path of the plan document (`--out`, else `$RUNNER_TEMP/tallyrelease-plan.json`).
+- `releases`: a compact JSON array of everything to publish. Stable releases come first, oldest release commit first, then in plan unit order. Prereleases follow in plan unit order, and a unit with a release at HEAD has none. Every stable tag in the range is listed, also several of one unit, so nothing tagged stays unpublished; a failed run lists its releases again on the next run.
+
+| Field        | Meaning                                                                                                                                                                                             |
+| :----------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `path` | Unit id and root.                                                                                                                                                                                   |
+| `kind`       | `release` or `prerelease`.                                                                                                                                                                          |
+| `version`    | Released version, or the prerelease version of the plan.                                                                                                                                            |
+| `channel`    | Channel of the line for a prerelease, `null` for a release.                                                                                                                                         |
+| `tag`        | Version tag of a release, `null` for a prerelease.                                                                                                                                                  |
+| `tagPrefix`  | Literal part of the tag format before `{version}` (`{id}` rendered), `null` for a prerelease and for a tag format with text after `{version}`; publishers cannot apply the git rule to such a unit. |
+| `sha`        | Full sha the entry is built from (equals `releaseSha`).                                                                                                                                             |
+| `releaseSha` | Full sha of the tagged release commit, or HEAD for a prerelease.                                                                                                                                    |
+| `catchUp`    | `true` for a release whose commit is not HEAD.                                                                                                                                                      |
+| `pr`         | Number of the release PR, else `null`.                                                                                                                                                              |
+| `line`       | `default` or `maintenance`.                                                                                                                                                                         |
+
+The entry schema is `releaseEntrySchema` in `src/plan-schema.ts`.
+
+### Permissions and tokens
+
+| Command    | Token permissions                                                          |
+| :--------- | :------------------------------------------------------------------------- |
+| `affected` | `contents: read`, `actions: read` (build base)                             |
+| `plan`     | `contents: read`, `actions: read` (build base)                             |
+| `pr`       | `contents: write`, `pull-requests: write`, `issues: read` (label listing)  |
+| `release`  | `contents: write`, `pull-requests: write`, `issues: read`, `actions: read` |
+| `run`      | the union of the above                                                     |
+
+The token comes from `--token` or `GITHUB_TOKEN`. PRs and tags created with `GITHUB_TOKEN` trigger no workflows, so release PRs get no checks. Rulesets on `tallyrelease/*` branches or on version tags must allow the token.
+
 ## Shadow mode
 
 While release-please owns versions, `shadow` checks that tallyrelease would have released the same versions. Run it on pushes to the default branch:
