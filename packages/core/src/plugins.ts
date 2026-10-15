@@ -1,3 +1,4 @@
+import { CORE_PLUGIN } from "./builtin.js";
 import { TallyError } from "./errors.js";
 import { assertPlugin } from "./plugin.js";
 
@@ -22,6 +23,22 @@ export interface PluginEnv {
 	debug?: (message: string) => void;
 }
 
+/** Frozen `Ctx` factory; warnings are tagged with the plugin name. */
+export const pluginCtx =
+	(env: PluginEnv, warnings: Warning[]) =>
+	(name: string, options: unknown): Ctx =>
+		Object.freeze({
+			options,
+			repo: Object.freeze({ name: env.repo.name }),
+			fs: env.fs,
+			log: Object.freeze({
+				warn: (message: string) => {
+					warnings.push({ code: "W_PLUGIN", message, plugin: name });
+				},
+				debug: (message: string) => env.debug?.(`${name}: ${message}`),
+			}),
+		});
+
 /** Resolves enabled plugins in config order and validates their options. */
 export const activatePlugins = async (
 	env: PluginEnv,
@@ -37,6 +54,13 @@ export const activatePlugins = async (
 		}
 
 		assertPlugin(plugin);
+		if (plugin.name === CORE_PLUGIN) {
+			throw new TallyError(
+				"E_PLUGIN_NAME",
+				`plugin name "${CORE_PLUGIN}" is reserved for core built-ins`,
+				{ plugin: name },
+			);
+		}
 
 		const { globalInputs, ...rest } = raw ?? {};
 		let options: unknown = rest;
@@ -54,17 +78,7 @@ export const activatePlugins = async (
 			options = result.value;
 		}
 
-		const ctx: Ctx = Object.freeze({
-			options,
-			repo: Object.freeze({ name: env.repo.name }),
-			fs: env.fs,
-			log: Object.freeze({
-				warn: (message: string) => {
-					warnings.push({ code: "W_PLUGIN", message, plugin: name });
-				},
-				debug: (message: string) => env.debug?.(`${name}: ${message}`),
-			}),
-		});
+		const ctx = pluginCtx(env, warnings)(name, options);
 		active.push({ plugin, ctx, globalInputs: globalInputs !== false });
 	}
 

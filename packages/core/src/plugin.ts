@@ -176,6 +176,12 @@ export interface IntentSource<O = unknown> {
 	) => MaybePromise<Change[]>;
 }
 
+/** A `Release-As` value; `unit` is set by the qualified form `<unit>@<version>`. */
+export interface ReleaseAsValue {
+	unit?: string;
+	version: string;
+}
+
 export interface Change {
 	/** Commit-derived changes are attributed via that commit's files. */
 	sha?: string;
@@ -186,7 +192,7 @@ export interface Change {
 	scope?: string;
 	subject: string;
 	body?: string;
-	releaseAs?: string;
+	releaseAs?: ReleaseAsValue[];
 	pr?: number;
 	date?: string;
 }
