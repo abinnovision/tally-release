@@ -32,6 +32,8 @@ const changed = (a: Tree, b: Tree): string[] =>
 /** Path git would C-quote without `-z`. */
 const ODD_PATH = 'odd/a "q"\tü.txt';
 
+const FOOTER_MESSAGE = "feat: h\n\nbody\n\nRelease-As: core@1.0.0\nRefs: #1";
+
 const CONFORMANCE_DAG: Dag = {
 	commits: [
 		{
@@ -56,6 +58,12 @@ const CONFORMANCE_DAG: Dag = {
 			files: { "README.md": "e\n" },
 		},
 		{ id: "f", message: "chore: odd", files: { [ODD_PATH]: "f\n" } },
+		{ id: "g", message: "chore: empty" },
+		{
+			id: "h",
+			message: FOOTER_MESSAGE,
+			files: { "README.md": "h\n" },
+		},
 	],
 	tags: [
 		{ name: "v1", commit: "a" },
@@ -144,6 +152,8 @@ export interface Dag {
 export interface MemoryGit extends GitReader {
 	/** File contents at a commit id, tag name or `HEAD` (the last commit). */
 	tree: (ref: string) => Record<string, string>;
+	/** Parent commit ids of a ref. */
+	parents: (ref: string) => string[];
 }
 
 /** In-memory `GitReader` over a commit graph. */
@@ -263,6 +273,7 @@ export const memoryGit = (dag: Dag): MemoryGit => {
 		},
 		diffFiles: (from, to) => changed(node(from).tree, node(to).tree),
 		tree: (ref) => Object.fromEntries(node(ref).tree),
+		parents: (ref) => [...node(ref).parents],
 	};
 };
 
@@ -274,7 +285,8 @@ export type ReaderFactory = (
 /**
  * Shared `GitReader` spec. Fixture: a - b - d - m - e - f on the first-parent
  * chain, c branches from b and merges into m, d renames pkg/x.ts to pkg/y.ts,
- * f adds a path with a quote, a tab and a non-ASCII character.
+ * f adds a path with a quote, a tab and a non-ASCII character, g is empty and
+ * h carries footers. `a` has a later committer date than b, c and d.
  */
 export const gitReaderConformance = (makeReader: ReaderFactory): void => {
 	describe("GitReader conformance", () => {
@@ -357,6 +369,26 @@ export const gitReaderConformance = (makeReader: ReaderFactory): void => {
 			expect(Date.parse(byId("e")?.date ?? "")).toBe(
 				Date.parse("2024-01-02T12:30:00Z"),
 			);
+		});
+
+		it("lists every commit before its parents", async () => {
+			const commits = await git.log(null, sha("e"));
+			const index = new Map(commits.map((c, i) => [c.sha, i]));
+			for (const [i, c] of commits.entries()) {
+				for (const parent of c.parents) {
+					expect(index.get(parent) ?? Infinity).toBeGreaterThan(i);
+				}
+			}
+		});
+
+		it("logs empty commits and footers verbatim", async () => {
+			const commits = await git.log(sha("f"), sha("h"));
+			expect(commits.map((c) => c.sha).sort(compare)).toEqual(shas(["g", "h"]));
+			expect(commits.find((c) => c.sha === sha("g"))?.files).toEqual([]);
+			expect(commits.find((c) => c.sha === sha("h"))).toMatchObject({
+				message: FOOTER_MESSAGE,
+				files: ["README.md"],
+			});
 		});
 
 		it("counts first-parent commits", async () => {
