@@ -4,7 +4,15 @@ tallyrelease reads git history and a dependency graph supplied by ecosystem plug
 
 ## Status
 
-v0.1 is in progress: the `affected` command, with release-please still owning versions. See [docs/design.md](docs/design.md) for the design, milestones and decisions.
+v0.1 ships the `affected`, `graph` and `check` commands, with release-please still owning versions. The versioning planner is next. See [docs/design.md](docs/design.md) for the design, milestones and decisions.
+
+## Install
+
+```sh
+npm i -D @tallyrelease/cli
+```
+
+See [packages/cli/README.md](packages/cli/README.md) for full usage.
 
 ## Packages
 

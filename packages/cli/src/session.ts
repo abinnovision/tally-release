@@ -1,4 +1,5 @@
 import { loadWorkspace, TallyError } from "@tallyrelease/core";
+import { existsSync } from "node:fs";
 import { basename, relative, resolve, sep } from "node:path";
 
 import { githubContext } from "./ci/github-env.js";
@@ -70,13 +71,29 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 	const onDisk = deps.git === undefined && deps.fs === undefined;
 
 	const assertRepoRoot = async () => {
+		if (!existsSync(root)) {
+			throw new TallyError(
+				"E_CWD_MISSING",
+				`directory "${root}" does not exist`,
+				{
+					cwd: root,
+				},
+			);
+		}
+
 		const result = await runGit(
 			root,
 			["rev-parse", "--show-toplevel", "--show-prefix"],
 			debug,
 		);
+		if (result.code !== 0) {
+			throw new TallyError("E_NOT_A_REPO", `not a git repository: ${root}`, {
+				cwd: root,
+			});
+		}
+
 		const [toplevel = "", prefix = ""] = result.stdout.split("\n");
-		if (result.code === 0 && prefix !== "") {
+		if (prefix !== "") {
 			throw new TallyError(
 				"E_NOT_REPO_ROOT",
 				`"${root}" is below the repository root "${toplevel}"; run from the root or pass --cwd`,
