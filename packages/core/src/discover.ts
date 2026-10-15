@@ -17,6 +17,8 @@ interface Entry {
 	release?: boolean | undefined;
 	/** From the config overlay only. */
 	tags?: string[] | undefined;
+	/** From the config overlay only. */
+	initialVersion?: string | undefined;
 }
 
 /** Drops `.` and empty segments; rejects absolute roots and `..` segments. */
@@ -77,9 +79,10 @@ export const discoverUnits = async (
 		}
 	}
 
-	for (const [key, { release, tags, ...overlay }] of Object.entries(
-		env.config.units ?? {},
-	)) {
+	for (const [
+		key,
+		{ release, tags, initialVersion, ...overlay },
+	] of Object.entries(env.config.units ?? {})) {
 		const root = normalizeRoot(key);
 		const invalid = tags?.find((t) => !UNIT_TAG.test(t));
 		if (invalid !== undefined) {
@@ -95,6 +98,7 @@ export const discoverUnits = async (
 			entry.draft = { ...entry.draft, ...overlay };
 			entry.release = release;
 			entry.tags = tags;
+			entry.initialVersion = initialVersion;
 		} else {
 			byRoot.set(root, {
 				plugin: "config",
@@ -106,6 +110,7 @@ export const discoverUnits = async (
 				meta: {},
 				release,
 				tags,
+				initialVersion,
 			});
 		}
 	}
@@ -150,7 +155,7 @@ export const discoverUnits = async (
 	const { defaults } = env.config;
 
 	return [...byId.values()]
-		.map(({ plugin, draft, meta, release, tags }): Unit => {
+		.map(({ plugin, draft, meta, release, tags, initialVersion }): Unit => {
 			const { root } = draft;
 			const nested = roots
 				.filter((r) => isInside(r, root))
@@ -177,6 +182,7 @@ export const discoverUnits = async (
 					(root === "." ? "v{version}" : "{id}-v{version}"),
 				propagate: draft.propagate ?? defaults?.propagate ?? "auto",
 				tags: Object.freeze(uniqueSorted(tags ?? [])),
+				initialVersion: initialVersion ?? defaults?.initialVersion ?? null,
 				meta: Object.freeze(meta),
 			});
 		})

@@ -1,0 +1,31 @@
+description: For an ungrouped unit Release-As overrides next, even below the computed bump.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a\n\nRelease-As: a@1.4.1"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.4.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        bump: minor
+        releaseAs: 1.4.1
+        next: 1.4.1
+        version: 1.4.1-beta.1
+        changes: [{ sha: c1, releaseAs: 1.4.1 }]
+    warnings: []

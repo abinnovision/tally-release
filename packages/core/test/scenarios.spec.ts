@@ -5,7 +5,7 @@ import { parse } from "yaml";
 
 import { flutter } from "./fixtures/flutter.js";
 import { collectPlanFacts } from "../src/facts.js";
-import { computeAffected, loadWorkspace } from "../src/index.js";
+import { computeAffected, computePlan, loadWorkspace } from "../src/index.js";
 import { memoryFs, memoryGit } from "../src/testing.js";
 
 import type {
@@ -49,8 +49,8 @@ interface Scenario {
 	head?: string;
 	/** Defaults to `main`. */
 	branch?: string;
-	/** Collects plan facts when set. */
-	plan?: Record<string, never>;
+	/** Collects plan facts and computes the plan when set. */
+	plan?: { all?: boolean };
 	expect?: Record<string, unknown>;
 	error?: { code: string; details?: Record<string, unknown> };
 }
@@ -113,16 +113,24 @@ const run = async (s: Scenario) => {
 		repo: { name: s.repo ?? "demo" },
 		...(s.configFile !== undefined && { configFile: s.configFile }),
 	});
-	const affected = await computeAffected(workspace, git, {
+	const opts = {
 		tool: "tallyrelease@test",
 		branch: s.branch ?? "main",
 		head,
 		base: s.base,
-		baseSource: s.base === null ? "none" : "cli",
-	});
+		baseSource: s.base === null ? ("none" as const) : ("cli" as const),
+	};
+	const affected = await computeAffected(workspace, git, opts);
 
 	const facts = s.plan
 		? await collectPlanFacts(workspace, git, { head, fs })
+		: undefined;
+	const plan = s.plan
+		? await computePlan(workspace, git, {
+				...opts,
+				fs,
+				all: s.plan.all ?? false,
+			})
 		: undefined;
 
 	return {
@@ -131,6 +139,7 @@ const run = async (s: Scenario) => {
 		order: workspace.graph.order,
 		affected,
 		facts,
+		plan,
 	};
 };
 

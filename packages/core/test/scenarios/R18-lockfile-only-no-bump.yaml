@@ -1,0 +1,34 @@
+description: A lockfile-only commit rebuilds every unit and bumps none.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  globalInputs: [yarn.lock]
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", yarn.lock: "0" }
+    - id: c1
+      message: "fix: bump lockfile"
+      files: { yarn.lock: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    build: { all: true, globalInputs: [yarn.lock] }
+    units:
+      - id: a
+        affected: { reason: global }
+        kind: rebuild
+        bump: null
+        next: null
+        version: null
+        changes: []
+    warnings: []

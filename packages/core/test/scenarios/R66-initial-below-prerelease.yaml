@@ -1,0 +1,28 @@
+description: A first release warns when its initial version does not exceed an existing prerelease tag.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, initialVersion: 0.1.0 }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0-beta.4, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, from: null, next: 0.1.0, version: 0.1.0-beta.2 }
+    warnings:
+      - code: W_INITIAL_BELOW_PRERELEASE
+        message: 'unit "a": initial version 0.1.0 does not exceed prerelease tag "a-v1.0.0-beta.4"'

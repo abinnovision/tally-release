@@ -18,6 +18,7 @@ const unit = (id: string, root: string, packageName: string): Unit => ({
 	tagFormat: "",
 	propagate: "auto",
 	tags: [],
+	initialVersion: null,
 	meta: { php: { packageName } },
 });
 

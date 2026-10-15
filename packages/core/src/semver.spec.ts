@@ -24,6 +24,7 @@ const unit: Unit = {
 	tagFormat: "{id}-v{version}",
 	propagate: "auto",
 	tags: [],
+	initialVersion: null,
 	meta: {},
 };
 

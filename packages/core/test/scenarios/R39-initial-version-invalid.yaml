@@ -1,0 +1,18 @@
+description: An initial version the unit's scheme does not parse fails.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true, initialVersion: v1 }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+base: c0
+plan: {}
+error:
+  code: E_INITIAL_VERSION
+  details: { unit: a, version: v1 }

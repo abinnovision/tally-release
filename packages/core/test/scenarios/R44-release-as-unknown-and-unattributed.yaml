@@ -1,0 +1,41 @@
+description: >-
+  A qualified value naming an unknown unit warns and is ignored; a plain value
+  in an empty commit applies to every released unit, and warns only when it is
+  attributed to unreleased units alone.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/a: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "chore: a\n\nRelease-As: x@1.0.0"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore: release\n\nRelease-As: 2.0.0"
+    - id: c3
+      message: "chore: b\n\nRelease-As: 3.0.0"
+      files: { packages/b/index.ts: "3" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: null
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, kind: prerelease, releaseAs: 2.0.0, next: 2.0.0 }
+      - { id: b, kind: rebuild, next: null }
+    warnings:
+      - code: W_RELEASE_AS_IGNORED
+        message: 'Release-As "3.0.0" in c3 is not attributed to a released unit'
+      - code: W_RELEASE_AS_UNKNOWN
+        message: 'Release-As "x@1.0.0" in c1 names unknown unit "x"'

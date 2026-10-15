@@ -1,0 +1,30 @@
+description: >-
+  Below 1.0.0 preMajor.feat applies only to types whose level is minor, so a
+  feat configured as patch stays patch.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  bumps:
+    types: { feat: patch }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v0.3.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, bump: patch, next: 0.3.1 }
+    warnings: []

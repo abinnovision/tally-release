@@ -1,0 +1,47 @@
+description: >-
+  Values that do not parse, are prereleases or are not above from warn and the
+  normal bump applies.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "fix: a\n\nRelease-As: 1.0.0"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore: a\n\nRelease-As: banana"
+      files: { packages/a/index.ts: "2" }
+    - id: c3
+      message: "chore: a\n\nRelease-As: 2.0.0-rc.1"
+      files: { packages/a/index.ts: "3" }
+  tags:
+    - { name: a-v1.2.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        bump: patch
+        releaseAs: null
+        next: 1.2.1
+        changes:
+          - { sha: c3 }
+          - { sha: c2 }
+          - { sha: c1, releaseAs: 1.0.0 }
+    warnings:
+      - code: W_RELEASE_AS_INVALID
+        message: 'unit "a": Release-As "2.0.0-rc.1" in c3 is a prerelease; ignored'
+      - code: W_RELEASE_AS_INVALID
+        message: 'unit "a": Release-As "banana" in c2 is not a semver version; ignored'
+      - code: W_RELEASE_AS_INVALID
+        message: 'unit "a": Release-As "1.0.0" in c1 does not exceed 1.2.0; ignored'

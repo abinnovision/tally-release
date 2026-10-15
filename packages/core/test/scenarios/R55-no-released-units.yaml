@@ -1,0 +1,25 @@
+description: A matching rule without released units warns.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, kind: rebuild, scheme: semver, next: null, version: null }
+    warnings:
+      - code: W_NO_RELEASED_UNITS
+        message: 'branch rule "main" matches, but no unit is released'

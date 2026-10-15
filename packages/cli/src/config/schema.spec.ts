@@ -10,12 +10,12 @@ const read = (path: string) =>
 
 const validate = new Ajv({ strict: false }).compile(configJsonSchema());
 
-// Examples from design.md A.10 that only use currently supported keys.
+// Examples from design.md A.10 without v0.3 keys and groups.
 const examples = [
 	...read("../../../../docs/design.md").matchAll(/```yaml\n([\s\S]*?)```/g),
 ]
-	.map((m) => m[1]!.split("# v0.2")[0]!)
-	.filter((y) => y.startsWith("# ") && !y.includes("branches:"));
+	.map((m) => m[1]!.split("# v0.3")[0]!.replace(/^groups:\n(?: .*\n)*/m, ""))
+	.filter((y) => y.startsWith("# "));
 
 describe("configJsonSchema", () => {
 	it("finds the design examples", () => {
@@ -33,6 +33,22 @@ describe("configJsonSchema", () => {
 
 	it("accepts $schema", () => {
 		expect(validate({ $schema: "x" })).toBe(true);
+	});
+
+	it("accepts release keys", () => {
+		expect(
+			validate({
+				defaults: { initialVersion: "0.1.0" },
+				units: { a: { initialVersion: "2.0.0" } },
+				branches: [
+					{ name: "main", line: "default", channel: "beta" },
+					{ name: "release/{major}.x", line: "maintenance" },
+				],
+				bumps: { types: { deps: "patch" }, preMajor: { breaking: "major" } },
+			}),
+		).toBe(true);
+		expect(validate({ branches: [{ name: "main" }] })).toBe(false);
+		expect(validate({ bumps: { types: { feat: "none" } } })).toBe(false);
 	});
 
 	it("rejects version none and unknown keys", () => {

@@ -1,0 +1,31 @@
+description: Below 1.0.0 a breaking change bumps the minor version by default.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat!: drop the old api"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v0.3.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        from: 0.3.0
+        bump: minor
+        next: 0.4.0
+        version: 0.4.0-beta.1
+        changes: [{ sha: c1, type: feat, breaking: true }]
+    warnings: []

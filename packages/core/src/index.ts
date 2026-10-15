@@ -8,6 +8,15 @@ export type {
 	BaseSource,
 } from "./affected.js";
 export type { ParsedCommit } from "./conventional.js";
+export type {
+	GroupPlan,
+	Plan,
+	PlanChange,
+	PlanLine,
+	PlanOptions,
+	ReleasedUnit,
+	UnitPlan,
+} from "./plan.js";
 export type { DepConfig, TallyConfig, UnitOverlay } from "./config.js";
 export type { Warning } from "./errors.js";
 export type { Graph, SourcedEdge } from "./graph.js";
@@ -36,6 +45,7 @@ export type {
 	WriteCtx,
 } from "./plugin.js";
 export type { ActivePlugin, PluginEnv } from "./plugins.js";
+export type { BranchRule, ReleaseSettings } from "./release.js";
 export type { SchemeEntry } from "./schemes.js";
 export type { SemVer } from "./semver.js";
 export type { IntentEntry, Workspace, WorkspaceInput } from "./workspace.js";
@@ -47,6 +57,7 @@ export { discoverUnits } from "./discover.js";
 export { TallyError } from "./errors.js";
 export { buildGraph } from "./graph.js";
 export { definePlugin, defaultUnitId, PLUGIN_API_VERSION } from "./plugin.js";
+export { computePlan } from "./plan.js";
 export { activatePlugins } from "./plugins.js";
 export { semver } from "./semver.js";
 export { loadWorkspace } from "./workspace.js";

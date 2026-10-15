@@ -13,6 +13,13 @@ const tagFormat = z.string().meta({
 		"Tag template. Defaults to {id}-v{version}, or v{version} for the root unit.",
 });
 
+const initialVersion = z.string().meta({
+	description:
+		"Version of the first release, parsed by the unit's scheme. Defaults to the scheme's initial version (semver: 1.0.0).",
+});
+
+const bumpLevel = z.enum(["major", "minor", "patch"]);
+
 const unitOverlay = z.strictObject({
 	id: z
 		.string()
@@ -61,6 +68,7 @@ const unitOverlay = z.strictObject({
 				"Labels for filtering with affected --tag (letters, digits, dot, underscore, dash), for example docker or npm.",
 		})
 		.exactOptional(),
+	initialVersion: initialVersion.exactOptional(),
 });
 
 /** Schema of `tallyrelease.yaml`. */
@@ -87,6 +95,7 @@ export const configSchema = z.strictObject({
 				.exactOptional(),
 			tagFormat: tagFormat.exactOptional(),
 			propagate: propagate.exactOptional(),
+			initialVersion: initialVersion.exactOptional(),
 		})
 		.meta({ description: "Defaults applied to every unit." })
 		.exactOptional(),
@@ -123,6 +132,51 @@ export const configSchema = z.strictObject({
 		description:
 			"Globs of files whose change affects all units, unioned with plugin defaults.",
 	}),
+	branches: z
+		.array(
+			z.strictObject({
+				name: z.string().meta({
+					description:
+						"Branch name pattern; supports * and the captures {major} and {minor}.",
+				}),
+				line: z.enum(["default", "maintenance"]).meta({
+					description: "Release line of matching branches.",
+				}),
+				channel: z
+					.string()
+					.meta({
+						description:
+							"Prerelease channel (letters, digits, dash); may use {major} and {minor} captured by name.",
+					})
+					.exactOptional(),
+			}),
+		)
+		.meta({
+			description: "Branch rules; the first rule matching the branch wins.",
+		})
+		.exactOptional(),
+	bumps: z
+		.strictObject({
+			types: z
+				.record(z.string(), bumpLevel)
+				.meta({
+					description:
+						"Commit type to bump level, merged over feat: minor, fix: patch, perf: patch, revert: patch. Breaking changes bump major.",
+				})
+				.exactOptional(),
+			preMajor: z
+				.strictObject({
+					breaking: bumpLevel.exactOptional(),
+					feat: bumpLevel.exactOptional(),
+				})
+				.meta({
+					description:
+						"Bump levels for breaking changes and feat while the major version is 0. Default minor for both.",
+				})
+				.exactOptional(),
+		})
+		.meta({ description: "How commits map to bump levels." })
+		.exactOptional(),
 }) satisfies z.ZodType<TallyConfig>;
 
 /** JSON schema (draft-07) of `tallyrelease.yaml` as published for editors. */
