@@ -1,0 +1,51 @@
+description: >-
+  Absorption terminates on cycles among unreleased units; a commit touching
+  the unit and absorbed units, or several absorbed units, is one Change.
+plugins:
+  - name: stub
+    units:
+      - { id: app, root: apps/app }
+      - { id: u1, root: packages/u1 }
+      - { id: u2, root: packages/u2 }
+    edges:
+      - { from: u1, to: u2, reason: dependencies, pinned: false }
+      - { from: u2, to: u1, reason: dependencies, pinned: false }
+      - { from: u1, to: app, reason: dependencies, pinned: false }
+      - { from: u2, to: app, reason: dependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  units:
+    apps/app: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        apps/app/index.ts: "0"
+        packages/u1/index.ts: "0"
+        packages/u2/index.ts: "0"
+    - id: c1
+      message: "fix: u1 and u2"
+      files: { packages/u1/index.ts: "1", packages/u2/index.ts: "1" }
+    - id: c2
+      message: "fix: app and u1"
+      files: { apps/app/index.ts: "2", packages/u1/index.ts: "2" }
+  tags:
+    - { name: app-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: u1 }
+      - { id: u2 }
+      - id: app
+        bump: patch
+        absorbedFrom: [u1, u2]
+        next: 1.0.1
+        changes:
+          - { sha: c2, type: fix }
+          - { sha: c1, type: fix, via: u1 }
+    warnings:
+      - { code: W_CYCLE }

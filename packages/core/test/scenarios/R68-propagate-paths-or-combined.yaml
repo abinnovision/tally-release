@@ -1,0 +1,56 @@
+description: >-
+  An unpinned direct edge and a path whose first hop is pinned combine to a
+  pinned edge; a two-hop unreleased chain keeps the first hop's pinned.
+plugins:
+  - name: stub
+    units:
+      - { id: r1, root: packages/r1 }
+      - { id: u, root: packages/u }
+      - { id: u1, root: packages/u1 }
+      - { id: u2, root: packages/u2 }
+      - { id: r2, root: packages/r2 }
+      - { id: r3, root: packages/r3 }
+    edges:
+      - { from: r1, to: r2, reason: dependencies, pinned: false }
+      - { from: r1, to: u, reason: dependencies, pinned: true }
+      - { from: u, to: r2, reason: dependencies, pinned: false }
+      - { from: r1, to: u1, reason: dependencies, pinned: true }
+      - { from: u1, to: u2, reason: dependencies, pinned: false }
+      - { from: u2, to: r3, reason: dependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  units:
+    packages/r1: { release: true }
+    packages/r2: { release: true }
+    packages/r3: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/r1/index.ts: "0"
+        packages/u/index.ts: "0"
+        packages/u1/index.ts: "0"
+        packages/u2/index.ts: "0"
+        packages/r2/index.ts: "0"
+        packages/r3/index.ts: "0"
+    - id: c1
+      message: "fix: r1"
+      files: { packages/r1/index.ts: "1" }
+  tags:
+    - { name: r1-v1.0.0, commit: c0 }
+    - { name: r2-v1.0.0, commit: c0 }
+    - { name: r3-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: r1, bump: patch, next: 1.0.1 }
+      - { id: u, bump: null }
+      - { id: r2, bump: patch, next: 1.0.1, propagatedFrom: [r1] }
+      - { id: u1, bump: null }
+      - { id: u2, bump: null }
+      - { id: r3, bump: patch, next: 1.0.1, propagatedFrom: [r1] }
+    warnings: []

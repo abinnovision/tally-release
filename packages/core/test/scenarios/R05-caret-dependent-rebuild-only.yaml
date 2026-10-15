@@ -1,0 +1,61 @@
+description: >-
+  An unpinned dependent with propagate auto is rebuilt only; an explicit
+  propagate patch raises an unpinned dependent.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+    edges:
+      - { from: a, to: b, reason: "dependencies: ^1.0.0", pinned: false }
+      - { from: a, to: c, reason: "dependencies: ^1.0.0", pinned: false }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/c: { propagate: patch }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - {
+          id: a,
+          kind: prerelease,
+          bump: patch,
+          next: 1.0.1,
+          propagatedFrom: [],
+        }
+      - id: b
+        affected: { reason: dependent, via: [a] }
+        kind: rebuild
+        bump: null
+        propagatedFrom: []
+        next: null
+        changes: []
+      - id: c
+        affected: { reason: dependent, via: [a] }
+        kind: prerelease
+        bump: patch
+        propagatedFrom: [a]
+        next: 1.0.1
+        version: 1.0.1-beta.1
+        changes: []
+    warnings: []

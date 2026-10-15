@@ -90,7 +90,7 @@ export interface AttributedChange {
 /**
  * Changes of `(from, head]`, in core commit order, attributed to all units. A
  * unit's consumers read only its own range (`UnitFacts.from`), filtered to the
- * unit (plus the units it absorbs, from S3).
+ * unit and the units it absorbs.
  */
 export interface RangeFacts {
 	readonly from: string | null;

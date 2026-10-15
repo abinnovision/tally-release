@@ -1,0 +1,40 @@
+description: >-
+  An unpinned edge (peerDependencies) rebuilds its dependent; a pinned edge
+  (optionalDependencies) patches it.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+    edges:
+      - { from: a, to: b, reason: "peerDependencies: 1.0.0", pinned: false }
+      - { from: a, to: c, reason: "optionalDependencies: 1.0.0", pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, bump: patch, next: 1.0.1 }
+      - { id: b, bump: null, next: null, propagatedFrom: [] }
+      - { id: c, bump: patch, next: 1.0.1, propagatedFrom: [a] }
+    warnings: []

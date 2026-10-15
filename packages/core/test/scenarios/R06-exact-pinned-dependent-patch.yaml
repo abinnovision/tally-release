@@ -1,0 +1,50 @@
+description: >-
+  A pinned dependent with propagate auto is patched and lists the source in
+  propagatedFrom; propagate rebuild keeps a pinned dependent unchanged.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+    edges:
+      - { from: a, to: b, reason: "dependencies: 1.0.0", pinned: true }
+      - { from: a, to: c, reason: "dependencies: 1.0.0", pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/c: { propagate: rebuild }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.2.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: a, bump: minor, next: 1.1.0, propagatedFrom: [] }
+      - id: b
+        kind: prerelease
+        from: 1.2.0
+        bump: patch
+        propagatedFrom: [a]
+        absorbedFrom: []
+        next: 1.2.1
+        version: 1.2.1-beta.1
+        changes: []
+      - { id: c, kind: rebuild, bump: null, propagatedFrom: [], next: null }
+    warnings: []
