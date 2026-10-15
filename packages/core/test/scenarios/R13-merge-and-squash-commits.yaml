@@ -1,0 +1,69 @@
+description: >-
+  Merge commits are skipped, merged commits and squash commits are attributed
+  to every unit they touch, a merged maintenance tag moves the base tag but not
+  the line base, and changes follow committer date order. Unknown explicit
+  units warn once.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+    changes:
+      - { units: [b, x], type: fix, breaking: false, subject: from a file }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  globalInputs: [yarn.lock]
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
+    - id: c1
+      message: "feat: squash (#12)\n\n* fix: a\n* fix: b\n\nRelease-As: b@2.0.0"
+      date: "2024-01-31T23:00:00-02:00"
+      files: { packages/a/index.ts: "1", packages/b/index.ts: "1" }
+    - id: c2
+      parents: [c0]
+      message: "fix: a hotfix"
+      files: { packages/a/fix.ts: "1" }
+    - id: m1
+      parents: [c1, c2]
+      message: "Merge branch 'release/1.x'"
+    - id: c3
+      message: "fix: b"
+      date: "2024-02-01T00:30:00Z"
+      files: { packages/b/index.ts: "3", yarn.lock: "1" }
+    - id: c4
+      message: "chore: lockfile"
+      files: { yarn.lock: "2" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: a-v1.0.1, commit: c2 }
+base: c0
+plan: {}
+expect:
+  facts:
+    units:
+      - id: a
+        from: c2
+        baseTag: { name: a-v1.0.1, sha: c2 }
+        lineBaseTag: { name: a-v1.0.0, sha: c0 }
+        sinceLineBase: 4
+        total: 5
+        changes:
+          - { change: { sha: c1, type: feat, pr: 12 }, units: [a, b] }
+        releaseAs: []
+      - id: b
+        baseTag: { name: b-v1.0.0 }
+        lineBaseTag: { name: b-v1.0.0 }
+        sinceLineBase: 4
+        total: 5
+        changes:
+          - { change: { sha: c1, subject: squash }, units: [a, b] }
+          - { change: { sha: c3, subject: b }, units: [b] }
+          - { change: { subject: from a file }, units: [b] }
+        releaseAs:
+          - { sha: c1, version: 2.0.0 }
+    warnings:
+      - { code: W_UNIT_UNKNOWN, plugin: stub }

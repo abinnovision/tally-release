@@ -1,0 +1,21 @@
+description: A tag that parses for two released units is an overlap.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: ".", tagFormat: "v{version}" }
+      - { id: b, root: packages/b, tagFormat: "v{version}-b" }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "0", packages/b/index.ts: "0" }
+  tags:
+    - { name: v1.0.0, commit: c0 }
+    - { name: v1.0.0-b, commit: c0 }
+base: c0
+plan: {}
+error:
+  code: E_TAG_FORMAT_OVERLAP
+  details: { units: [a, b], tag: v1.0.0-b }

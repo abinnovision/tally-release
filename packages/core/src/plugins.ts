@@ -25,7 +25,7 @@ export interface PluginEnv {
 
 /** Frozen `Ctx` factory; warnings are tagged with the plugin name. */
 export const pluginCtx =
-	(env: PluginEnv, warnings: Warning[]) =>
+	(env: Pick<PluginEnv, "fs" | "repo" | "debug">, warnings: Warning[]) =>
 	(name: string, options: unknown): Ctx =>
 		Object.freeze({
 			options,

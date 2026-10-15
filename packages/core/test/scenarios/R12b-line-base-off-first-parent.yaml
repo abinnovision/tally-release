@@ -1,0 +1,43 @@
+description: >-
+  A stable tag reached only through a merge is the base tag but not the line
+  base, so the counter starts at the root.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "fix: on a side branch"
+      files: { packages/a/side.ts: "1" }
+    - id: c2
+      parents: [c0]
+      message: "feat: a"
+      files: { packages/a/index.ts: "2" }
+    - id: m
+      parents: [c2, c1]
+      message: Merge side
+    - id: c3
+      message: "fix: a"
+      files: { packages/a/index.ts: "3" }
+  tags:
+    - { name: a-v1.0.0, commit: c1 }
+base: c0
+plan: {}
+expect:
+  facts:
+    units:
+      - id: a
+        from: c1
+        baseTag: { name: a-v1.0.0 }
+        lineBaseTag: null
+        sinceLineBase: 4
+        total: 4
+        changes:
+          - { change: { sha: c3 }, units: [a] }
+          - { change: { sha: c2 }, units: [a] }

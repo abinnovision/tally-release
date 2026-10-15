@@ -1,0 +1,46 @@
+description: >-
+  Literal parts and ids are matched verbatim, so near-miss tags neither match
+  nor count as an overlap; a plugin scheme sorts tags by its own order.
+plugins:
+  - name: stub
+    schemes: [flutter]
+    units:
+      - { id: my.lib, root: packages/my.lib, tagFormat: "{id}+v{version}" }
+      - { id: myXlib, root: packages/myXlib, tagFormat: "{id}+v{version}" }
+      - {
+          id: app,
+          root: apps/app,
+          scheme: flutter,
+          tagFormat: "{id}@{version}",
+        }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/my.lib/index.ts: "0"
+        packages/myXlib/index.ts: "0"
+        apps/app/main.dart: "0"
+  tags:
+    - { name: my.lib+v1.0.0, commit: c0 }
+    - { name: my.libbv2.0.0, commit: c0 }
+    - { name: myXlib+v1.1.0, commit: c0 }
+    - { name: myZlib+v3.0.0, commit: c0 }
+    - { name: app@1.2.0+7, commit: c0 }
+    - { name: app@1.2.0+12, commit: c0 }
+    - { name: app@1.2.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  facts:
+    units:
+      - id: app
+        tags: [{ name: app@1.2.0+7 }, { name: app@1.2.0+12 }]
+        baseTag: { name: app@1.2.0+12, version: 1.2.0+12 }
+      - id: my.lib
+        tags: [{ name: my.lib+v1.0.0 }]
+        baseTag: { name: my.lib+v1.0.0 }
+      - id: myXlib
+        tags: [{ name: myXlib+v1.1.0 }]

@@ -105,9 +105,14 @@ export const gitReader = (
 			return result.code === 0;
 		},
 		isFirstParentAncestor: async (a, b) => {
+			const chain = await firstParentSet(b);
+			if (chain.has(a)) {
+				return true;
+			}
+
 			const sha = await resolve(a);
 
-			return sha !== undefined && (await firstParentSet(b)).has(sha);
+			return sha !== undefined && chain.has(sha);
 		},
 		log: async (from, to) => {
 			const out = await ok([
@@ -116,6 +121,7 @@ export const gitReader = (
 				"--no-show-signature",
 				"--no-color",
 				"--no-merges",
+				"--topo-order",
 				"--no-renames",
 				"--name-only",
 				"--format=%x1e%H%x00%P%x00%cI%x00%B%x00",

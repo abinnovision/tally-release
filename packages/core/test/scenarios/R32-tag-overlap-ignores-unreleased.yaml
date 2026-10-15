@@ -1,0 +1,38 @@
+description: >-
+  Unreleased units sharing a released unit's tag format never match its tags
+  and never overlap.
+config:
+  plugins: {}
+  defaults: { tagFormat: "v{version}" }
+  units:
+    packages/a: { id: a, release: true }
+    packages/b: { id: b }
+    packages/c: { id: c }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/b/index.ts: "0"
+        packages/c/index.ts: "0"
+    - id: c1
+      message: "fix: b"
+      files: { packages/b/index.ts: "1" }
+  tags:
+    - { name: v1.0.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  facts:
+    units:
+      - id: a
+        tags: [{ name: v1.0.0 }]
+        baseTag: { name: v1.0.0 }
+        lineBaseTag: { name: v1.0.0 }
+        sinceLineBase: 1
+        total: 2
+        changes: []
+    ranges:
+      - from: c0
+        changes:
+          - { change: { sha: c1, type: fix }, units: [b] }

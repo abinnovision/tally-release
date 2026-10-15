@@ -3,10 +3,13 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
+import { flutter } from "./fixtures/flutter.js";
+import { collectPlanFacts } from "../src/facts.js";
 import { computeAffected, loadWorkspace } from "../src/index.js";
 import { memoryFs, memoryGit } from "../src/testing.js";
 
 import type {
+	Change,
 	EdgeDraft,
 	Plugin,
 	TallyConfig,
@@ -25,7 +28,12 @@ interface Stub {
 	/** Accepted option keys; any other key is a validation issue. */
 	optionKeys?: string[];
 	throws?: "discover" | "edges" | "inputs";
+	schemes?: (keyof typeof SCHEMES)[];
+	/** Returned by an intent source for every range. */
+	changes?: Change[];
 }
+
+const SCHEMES = { flutter };
 
 interface Scenario {
 	description: string;
@@ -39,6 +47,10 @@ interface Scenario {
 	base: string | null;
 	/** Defaults to the last commit. */
 	head?: string;
+	/** Defaults to `main`. */
+	branch?: string;
+	/** Collects plan facts when set. */
+	plan?: Record<string, never>;
 	expect?: Record<string, unknown>;
 	error?: { code: string; details?: Record<string, unknown> };
 }
@@ -78,6 +90,12 @@ const stubPlugin = (stub: Stub): Plugin => {
 		discover: hook("discover", stub.units ?? []),
 		edges: hook("edges", stub.edges ?? []),
 		inputs: hook("inputs", { global: stub.inputs ?? [] }),
+		...(stub.schemes && {
+			schemes: Object.fromEntries(stub.schemes.map((n) => [n, SCHEMES[n]])),
+		}),
+		...(stub.changes && {
+			intent: [{ name: "stub", collect: () => stub.changes ?? [] }],
+		}),
 	};
 };
 
@@ -85,28 +103,34 @@ const run = async (s: Scenario) => {
 	const stubs = (s.plugins ?? []).map((p) => ({ apiVersion: 1, ...p }));
 	const git = memoryGit(s.git);
 	const head = s.head ?? s.git.commits.at(-1)?.id ?? "HEAD";
+	const fs = memoryFs(git.tree(head));
 	const workspace = await loadWorkspace({
 		config: s.config ?? {
 			plugins: Object.fromEntries(stubs.map((p) => [p.name, {}])),
 		},
 		plugins: stubs.map(stubPlugin),
-		fs: memoryFs(git.tree(head)),
+		fs,
 		repo: { name: s.repo ?? "demo" },
 		...(s.configFile !== undefined && { configFile: s.configFile }),
 	});
 	const affected = await computeAffected(workspace, git, {
 		tool: "tallyrelease@test",
-		branch: "main",
+		branch: s.branch ?? "main",
 		head,
 		base: s.base,
 		baseSource: s.base === null ? "none" : "cli",
 	});
+
+	const facts = s.plan
+		? await collectPlanFacts(workspace, git, { head, fs })
+		: undefined;
 
 	return {
 		units: workspace.units,
 		edges: workspace.graph.edges,
 		order: workspace.graph.order,
 		affected,
+		facts,
 	};
 };
 
