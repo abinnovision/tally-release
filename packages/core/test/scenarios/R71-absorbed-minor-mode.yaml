@@ -11,6 +11,7 @@ config:
   plugins: { stub: {} }
   units:
     apps/app: { release: true }
+  bumps: { absorbed: minor }
   branches:
     - { name: main, line: default }
 git:

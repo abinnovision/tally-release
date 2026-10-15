@@ -32,6 +32,8 @@ export interface BumpsConfig {
 	types?: Record<string, BumpLevel>;
 	/** Levels used while the major version is 0. */
 	preMajor?: { breaking?: BumpLevel; feat?: BumpLevel };
+	/** Level of changes absorbed from unreleased dependencies, default `patch`. */
+	absorbed?: "patch" | "minor";
 }
 
 export interface DepConfig {

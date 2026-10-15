@@ -1,0 +1,35 @@
+description: >-
+  A breaking change in an absorbed unit bumps patch by default.
+plugins:
+  - name: stub
+    units:
+      - { id: app, root: apps/app }
+      - { id: db, root: packages/db }
+    edges:
+      - { from: db, to: app, reason: dependencies, pinned: true }
+config:
+  plugins: { stub: {} }
+  units:
+    apps/app: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { apps/app/index.ts: "0", packages/db/index.ts: "0" }
+    - id: c1
+      message: "fix!: db drops a column"
+      files: { packages/db/index.ts: "1" }
+  tags:
+    - { name: app-v1.2.0, commit: c0 }
+base: c0
+plan: {}
+expect:
+  plan:
+    units:
+      - { id: db, bump: null }
+      - id: app
+        bump: patch
+        next: 1.2.1
+        changes: [{ sha: c1, type: fix, breaking: true, via: db }]
+    warnings: []
