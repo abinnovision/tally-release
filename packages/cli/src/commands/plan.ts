@@ -9,11 +9,18 @@ import { alignColumns } from "../output/columns.js";
 import { count } from "../output/count.js";
 import { painter } from "../output/paint.js";
 import { branchName } from "../session.js";
+import { repoRef } from "./effects.js";
 import { version } from "../version.js";
 
 import type { BuildBase } from "../ci/base.js";
 import type { Session } from "../session.js";
-import type { Plan, PlanLine, PlanOptions, Warning } from "@tallyrelease/core";
+import type {
+	Plan,
+	PlanLine,
+	PlanOptions,
+	ReleasedUnit,
+	Warning,
+} from "@tallyrelease/core";
 
 const lineLabel = (line: PlanLine | null, branch: string): string =>
 	line === null
@@ -195,19 +202,50 @@ export const planOptions = async (
 	};
 };
 
-/** Computes the release plan and writes the requested outputs. */
-export const plan = async (
+/**
+ * `released` with `pr` from `known` (tag to PR number), else the PR that
+ * merged the release commit, else null (also without a forge).
+ */
+export const releasedPrs = async (
 	session: Session,
-	flags: PlanFlags,
-): Promise<void> => {
-	const { opts, ref, base, warnings } = await planOptions(session, flags);
-	const planned = await session.planAt(ref, {
-		...opts,
-		all: flags.all ?? false,
-	});
-	const doc = { ...planned, warnings: [...planned.warnings, ...warnings] };
-	session.warn(doc.warnings);
+	released: readonly ReleasedUnit[],
+	known: ReadonlyMap<string, number> = new Map(),
+): Promise<ReleasedUnit[]> => {
+	const { forge } = session;
+	const shas = [
+		...new Set(
+			released.filter((r) => !known.has(r.tag)).map((r) => r.releaseSha),
+		),
+	];
+	const prs = new Map<string, number>();
+	if (forge && shas.length > 0) {
+		const repo = await repoRef(session);
+		const found = await Promise.all(
+			shas.map(async (sha) => await forge.prForCommit(repo, sha)),
+		);
+		shas.forEach((sha, i) => {
+			const number = found[i]?.number;
+			if (number !== undefined) {
+				prs.set(sha, number);
+			}
+		});
+	}
 
+	return released.map((r) => ({
+		...r,
+		pr: known.get(r.tag) ?? prs.get(r.releaseSha) ?? null,
+	}));
+};
+
+/** Writes `doc` to `--out`, `$GITHUB_OUTPUT`, the step summary and stdout. */
+export const writePlan = (
+	session: Session,
+	{ doc, base }: { doc: Plan; base: BuildBase },
+	flags: Pick<
+		PlanFlags,
+		"format" | "json" | "out" | "githubOutput" | "summary"
+	>,
+): void => {
 	const json = `${JSON.stringify(doc, null, 2)}\n`;
 	const out =
 		flags.out === undefined ? undefined : resolve(session.cwd, flags.out);
@@ -251,4 +289,40 @@ export const plan = async (
 				? markdown(doc, base)
 				: text(session, doc, base),
 	);
+};
+
+/** Computes the release plan and writes the requested outputs. */
+export const plan = async (
+	session: Session,
+	flags: PlanFlags,
+): Promise<void> => {
+	const { opts, ref, base, warnings } = await planOptions(session, flags);
+	const planned = await session.planAt(
+		ref,
+		{ ...opts, all: flags.all ?? false },
+		{ released: true },
+	);
+	// A forge request failure leaves the PR numbers null; plan stays lenient.
+	let { released } = planned;
+	const prWarnings: Warning[] = [];
+	try {
+		released = await releasedPrs(session, released);
+	} catch (error) {
+		if (error instanceof TallyError) {
+			throw error;
+		}
+
+		prWarnings.push({
+			code: "W_FORGE_ERROR",
+			message: `cannot read the PRs of released commits: ${error instanceof Error ? error.message : String(error)}`,
+		});
+	}
+
+	const doc = {
+		...planned,
+		released,
+		warnings: [...planned.warnings, ...warnings, ...prWarnings],
+	};
+	session.warn(doc.warnings);
+	writePlan(session, { doc, base }, flags);
 };

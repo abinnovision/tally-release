@@ -7,7 +7,7 @@ import {
 	TallyError,
 } from "@tallyrelease/core";
 
-import { effectSkipped } from "./effects.js";
+import { effectSkipped, repoRef } from "./effects.js";
 import { planOptions } from "./plan.js";
 import { LABELS } from "../forge/forge.js";
 
@@ -116,22 +116,6 @@ const upsertPr = async (
 	return `${dryRun ? "would update" : "updated"} PR #${String(pr.number)} ${p.branch}: ${p.title}`;
 };
 
-/** `GITHUB_REPOSITORY`, else owner and name from the repository URL. */
-export const repoRef = async (session: Session): Promise<RepoRef> => {
-	const [owner, repo] =
-		session.env["GITHUB_REPOSITORY"]?.split("/") ??
-		(await session.repoUrl())?.split("/").slice(-2) ??
-		[];
-	if (!owner || !repo) {
-		throw new TallyError(
-			"E_NO_FORGE",
-			"the forge repository is unknown; set GITHUB_REPOSITORY or an origin remote",
-		);
-	}
-
-	return { owner, repo };
-};
-
 export interface PrFlags {
 	branch?: string;
 	dryRun?: boolean;
@@ -155,7 +139,8 @@ export const releasePrs = async (
 		return;
 	}
 
-	const setup = await planOptions(session, flags);
+	// Release PRs need no build base; HEAD as base skips the forge lookup.
+	const setup = await planOptions(session, { ...flags, base: "HEAD" });
 	const repoUrl = await session.repoUrl();
 	const date = session.clock().toISOString().slice(0, 10);
 	const planned = await session.workspaceAt(null, async (workspace, fs) => {

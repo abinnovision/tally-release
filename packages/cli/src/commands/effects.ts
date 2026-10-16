@@ -1,3 +1,6 @@
+import { TallyError } from "@tallyrelease/core";
+
+import type { RepoRef } from "../forge/forge.js";
 import type { Session } from "../session.js";
 import type { PlanLine } from "@tallyrelease/core";
 
@@ -34,4 +37,20 @@ export const effectSkipped = (
 	}
 
 	return reason !== undefined;
+};
+
+/** `GITHUB_REPOSITORY`, else owner and name from the repository URL. */
+export const repoRef = async (session: Session): Promise<RepoRef> => {
+	const [owner, repo] =
+		session.env["GITHUB_REPOSITORY"]?.split("/") ??
+		(await session.repoUrl())?.split("/").slice(-2) ??
+		[];
+	if (!owner || !repo) {
+		throw new TallyError(
+			"E_NO_FORGE",
+			"the forge repository is unknown; set GITHUB_REPOSITORY or an origin remote",
+		);
+	}
+
+	return { owner, repo };
 };

@@ -8,9 +8,8 @@ import {
 	TallyError,
 } from "@tallyrelease/core";
 
-import { effectSkipped } from "./effects.js";
+import { effectSkipped, repoRef } from "./effects.js";
 import { planOptions } from "./plan.js";
-import { repoRef } from "./pr.js";
 import { LABELS } from "../forge/forge.js";
 
 import type { Forge, ReleasePr, RepoRef } from "../forge/forge.js";
@@ -89,34 +88,6 @@ const createReleases = async (
 	return created;
 };
 
-/** `git` with `local` tags on top; dry runs tag here instead of the repository. */
-const withTags = (
-	git: RepoGit,
-	local: ReadonlyMap<string, string>,
-): RepoGit => {
-	const merge = (tags: readonly TagRef[], extra: TagRef[]) =>
-		[...tags.filter((t) => !local.has(t.name)), ...extra].sort((a, b) =>
-			a.name < b.name ? -1 : 1,
-		);
-	const refs = () => [...local].map(([name, sha]) => ({ name, sha }));
-
-	return {
-		...git,
-		tags: async () => merge(await git.tags(), refs()),
-		tagsMerged: async (ref) => {
-			const head = (await git.resolve(ref)) ?? ref;
-			const merged = await Promise.all(
-				refs().map(async (t) =>
-					(await git.isAncestor(t.sha, head)) ? [t] : [],
-				),
-			);
-
-			return merge(await git.tagsMerged(ref), merged.flat());
-		},
-		resolve: async (ref) => local.get(ref) ?? (await git.resolve(ref)),
-	};
-};
-
 /**
  * Workspace and plan at the first parent of `mergeSha`; `plan` is undefined
  * when `releases` are given and do not equal it.
@@ -161,6 +132,34 @@ const planAtParent = async (
 	};
 };
 
+/** `git` with `local` tags on top; dry runs tag here instead of the repository. */
+export const withTags = (
+	git: RepoGit,
+	local: ReadonlyMap<string, string>,
+): RepoGit => {
+	const merge = (tags: readonly TagRef[], extra: TagRef[]) =>
+		[...tags.filter((t) => !local.has(t.name)), ...extra].sort((a, b) =>
+			a.name < b.name ? -1 : 1,
+		);
+	const refs = () => [...local].map(([name, sha]) => ({ name, sha }));
+
+	return {
+		...git,
+		tags: async () => merge(await git.tags(), refs()),
+		tagsMerged: async (ref) => {
+			const head = (await git.resolve(ref)) ?? ref;
+			const merged = await Promise.all(
+				refs().map(async (t) =>
+					(await git.isAncestor(t.sha, head)) ? [t] : [],
+				),
+			);
+
+			return merge(await git.tagsMerged(ref), merged.flat());
+		},
+		resolve: async (ref) => local.get(ref) ?? (await git.resolve(ref)),
+	};
+};
+
 export interface ReleaseFlags {
 	branch?: string;
 	dryRun?: boolean;
@@ -170,6 +169,8 @@ export interface ReleaseFlags {
 export interface Reconciled {
 	number: number;
 	tags: string[];
+	/** Merge commit the tags point at. */
+	sha: string;
 }
 
 /**
@@ -178,14 +179,17 @@ export interface Reconciled {
  * first parent of its merge gets its version and floating tags at the merge
  * (one atomic push), a GitHub release per unit and the `released` label; any
  * other PR is labelled `stale` with a comment. Merges that are not in HEAD
- * stay pending. Returns the tagged PRs, including those whose tags existed.
+ * stay pending. Returns the tagged PRs, including those whose tags existed,
+ * or undefined when `command` (`release` or `run`) is skipped. `ready` runs
+ * after the skip checks and before any effect.
  */
 export const reconcile = async (
 	session: Session,
 	flags: ReleaseFlags,
-): Promise<Reconciled[]> => {
-	if (effectSkipped(session, "release")) {
-		return [];
+	{ command, ready }: { command: string; ready: () => Promise<void> },
+): Promise<Reconciled[] | undefined> => {
+	if (effectSkipped(session, command)) {
+		return undefined;
 	}
 
 	// Reconcile needs no build base; HEAD as base skips the forge lookup.
@@ -195,9 +199,11 @@ export const reconcile = async (
 	});
 	const { opts } = setup;
 	const atHead = await session.planAt(null, opts);
-	if (effectSkipped(session, "release", atHead)) {
-		return [];
+	if (effectSkipped(session, command, atHead)) {
+		return undefined;
 	}
+
+	await ready();
 
 	const { forge, gitWriter } = session;
 	const dryTags = new Map<string, string>();
@@ -360,7 +366,7 @@ export const reconcile = async (
 		}
 
 		lines.push(`${label}: ${labelled} released`);
-		reconciled.push({ number: pr.number, tags });
+		reconciled.push({ number: pr.number, tags, sha: mergeSha });
 	}
 	/* eslint-enable no-await-in-loop */
 
