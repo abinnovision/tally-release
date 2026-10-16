@@ -1,6 +1,6 @@
 # tallyrelease - Development Guide
 
-tallyrelease computes affected build units and release plans for monorepos and single repos. The full design is in `docs/design.md`. Current status: v0.3 (release effects: version files, release PRs, tags, forge releases). This repo releases itself with tallyrelease (app-stack `tallyrelease: release`); the release-please files stay until one full release cycle has passed.
+tallyrelease computes affected build units and release plans for monorepos and single repos. The full design is in `docs/design.md`. Current status: v0.3 (release effects: version files, release PRs, tags, forge releases). This repo releases itself with tallyrelease (app-stack `tallyrelease: release`).
 
 ## Packages
 

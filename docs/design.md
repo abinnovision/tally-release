@@ -1,6 +1,6 @@
 # tallyrelease: design
 
-Status: v0.3 (effects: version files, release PRs, tags, forge releases). Release-please still owns versions in this repo until the switch (C, v0.3 task 6). Packages: `@tallyrelease/core` (pure planning core) and `@tallyrelease/cli` (binary `tallyrelease`). Config file: `tallyrelease.yaml`. Labels: `tallyrelease: pending` / `tallyrelease: released` / `tallyrelease: stale`. Release PR branches: `tallyrelease/release/<branch>/shared` and `tallyrelease/release/<branch>/<item>`. PR marker: `<!-- tallyrelease-plan:v1 ... -->`. Error codes `E_*`, warning codes `W_*`.
+Status: v0.3 (effects: version files, release PRs, tags, forge releases). This repo releases itself with tallyrelease since 0.3.1 (v0.3 task 6 done). Packages: `@tallyrelease/core` (pure planning core) and `@tallyrelease/cli` (binary `tallyrelease`). Config file: `tallyrelease.yaml`. Labels: `tallyrelease: pending` / `tallyrelease: released` / `tallyrelease: stale`. Release PR branches: `tallyrelease/release/<branch>/shared` and `tallyrelease/release/<branch>/<item>`. PR marker: `<!-- tallyrelease-plan:v1 ... -->`. Error codes `E_*`, warning codes `W_*`.
 
 Core function names: `discoverUnits()` in `discover.ts`, `buildGraph()` in `graph.ts`, `computeAffected()` in `affected.ts`, `computePlan()` in `plan.ts`. Plugin hooks keep the short names `discover` and `edges`.
 
