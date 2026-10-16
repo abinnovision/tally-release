@@ -430,7 +430,7 @@ branches:
 
 		expect(await pr(["--dry-run"])).toEqual({
 			code: 0,
-			stdout: `would push ${SHARED}\nwould create PR ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			stdout: `commit as tallyrelease <tallyrelease@users.noreply.github.com>\nwould push ${SHARED}\nwould create PR ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
 			stderr: "",
 		});
 		expect(remote.calls).toEqual([]);
@@ -441,12 +441,30 @@ branches:
 		remote.calls.length = 0;
 		expect((await pr(["--dry-run"])).stdout).toBe(
 			[
+				"commit as tallyrelease <tallyrelease@users.noreply.github.com>",
 				`would push ${SHARED}`,
 				`would update PR #1 ${SHARED}: chore(release): b@1.1.0`,
 				"",
 			].join("\n"),
 		);
 		expect(remote.calls).toEqual([]);
+	});
+
+	it("prints the commit identity from the git variables with --dry-run", async () => {
+		const { pr } = setup(repo(config()));
+
+		expect(
+			(
+				await pr(["--dry-run"], {
+					env: {
+						GIT_AUTHOR_NAME: "abi-jarvis[bot]",
+						GIT_AUTHOR_EMAIL: "1+abi-jarvis[bot]@users.noreply.github.com",
+					},
+				})
+			).stdout,
+		).toMatch(
+			/^commit as abi-jarvis\[bot\] <1\+abi-jarvis\[bot\]@users\.noreply\.github\.com>\nwould push /u,
+		);
 	});
 
 	it("labels an unlabelled open PR after a failed label call", async () => {
@@ -532,7 +550,7 @@ branches:
 		);
 		await releasePrs(session, { dryRun: true }, { reconciled: new Set([1]) });
 		expect(stdout).toBe(
-			`would create PR ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			`commit as tallyrelease <tallyrelease@users.noreply.github.com>\nwould create PR ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
 		);
 	});
 

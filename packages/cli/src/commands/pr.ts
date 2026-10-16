@@ -10,6 +10,7 @@ import {
 import { effectSkipped, repoRef } from "./effects.js";
 import { planOptions } from "./plan.js";
 import { LABELS } from "../forge/forge.js";
+import { identityFromEnv } from "../git/writer.js";
 
 import type { Forge, ReleasePr, RepoRef } from "../forge/forge.js";
 import type { Session } from "../session.js";
@@ -261,6 +262,11 @@ export const releasePrs = async (
 	const lines: string[] = [];
 	const pushes = prs.filter((p) => p.lease !== p.sha);
 	if (flags.dryRun) {
+		if (prs.length > 0) {
+			const { name, email } = identityFromEnv(session.env).author;
+			lines.push(`commit as ${name} <${email}>`);
+		}
+
 		lines.push(...pushes.map((p) => `would push ${p.branch}`));
 	} else if (pushes.length > 0) {
 		await gitWriter.push(

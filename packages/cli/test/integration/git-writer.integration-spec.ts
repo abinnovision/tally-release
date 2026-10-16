@@ -84,6 +84,30 @@ describe("git writer (E30)", () => {
 		expect(git(dir, "cat-file", "commit", sha)).not.toContain("gpgsig");
 	});
 
+	it("commits as a custom identity deterministically", async () => {
+		const { dir, head, date } = setup();
+		const identity = {
+			author: {
+				name: "bot[bot]",
+				email: "1+bot[bot]@users.noreply.github.com",
+			},
+			committer: { name: "Committer", email: "c@example.com" },
+		};
+		const writer = gitWriter(dir, undefined, identity);
+		const commit = {
+			parent: head,
+			files: new Map([["a.txt", "x\n"]]),
+			message: "chore(release): x",
+			date,
+		};
+		const sha = await writer.commitFiles(commit);
+
+		expect(await writer.commitFiles(commit)).toBe(sha);
+		expect(git(dir, "log", "-1", "--format=%an <%ae>|%cn <%ce>", sha)).toBe(
+			"bot[bot] <1+bot[bot]@users.noreply.github.com>|Committer <c@example.com>",
+		);
+	});
+
 	it("pushes with leases, atomic tags and forced floating tags", async () => {
 		const { dir, head, date, remote, writer } = setup();
 		const commit = async (content: string) =>
