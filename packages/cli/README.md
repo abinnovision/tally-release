@@ -72,7 +72,7 @@ steps:
       GITHUB_TOKEN: ${{ github.token }}
 ```
 
-The job needs `actions: read` for the base lookup.
+The job needs `actions: read` for the base lookup. See [GitHub token](#github-token).
 
 The `affected` output is a JSON array of `{id, path, plugin, reason, released, tags}` and works as a matrix:
 
@@ -126,17 +126,76 @@ With `--github-output`, `run` writes two outputs to `$GITHUB_OUTPUT`:
 
 The entry schema is `releaseEntrySchema` in `src/plan-schema.ts`.
 
-### Permissions and tokens
+### GitHub token
 
-| Command    | Token permissions                                                          |
-| :--------- | :------------------------------------------------------------------------- |
-| `affected` | `contents: read`, `actions: read` (build base)                             |
-| `plan`     | `contents: read`, `actions: read` (build base)                             |
-| `pr`       | `contents: write`, `pull-requests: write`, `issues: read` (label listing)  |
-| `release`  | `contents: write`, `pull-requests: write`, `issues: read`, `actions: read` |
-| `run`      | the union of the above                                                     |
+The token comes from `--token` or `GITHUB_TOKEN`. It authenticates two things: REST calls to the forge, and `git push` to `origin` (sent as an `Authorization` header that replaces persisted checkout credentials). Names below are fine-grained token and GitHub App permissions. `Metadata: read` is always granted.
 
-The token comes from `--token` or `GITHUB_TOKEN`. PRs and tags created with `GITHUB_TOKEN` trigger no workflows, so release PRs get no checks. Rulesets on `tallyrelease/*` branches or on version tags must allow the token.
+#### Permissions per command
+
+| Command             | Permissions                                                                                                | Without a token                                                                                                |
+| :------------------ | :--------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| `affected`, `plan`  | `Actions: read` for the build base. `Pull requests: read` for the PR numbers in `plan` (`released` units). | Warns `W_NO_FORGE`. A push uses the event's `before` sha; `schedule` and `workflow_dispatch` build everything. |
+| `shadow`            | none; reads local git only                                                                                 | unchanged                                                                                                      |
+| `pr --dry-run`      | `Contents: read`, `Pull requests: read`, `Issues: read`                                                    | `E_NO_FORGE`                                                                                                   |
+| `pr`                | `Contents: write`, `Pull requests: write`, `Issues: write`                                                 | `E_NO_FORGE`                                                                                                   |
+| `release --dry-run` | `Contents: read`, `Pull requests: read`, `Issues: read`                                                    | `E_NO_FORGE`                                                                                                   |
+| `release`           | `Contents: write`, `Pull requests: write`, `Issues: write`                                                 | `E_NO_FORGE`                                                                                                   |
+| `run --dry-run`     | read set below                                                                                             | `E_NO_FORGE`                                                                                                   |
+| `run`               | write set below                                                                                            | `E_NO_FORGE`                                                                                                   |
+
+`run` also needs `Actions: read` for the build base. When the forge fails while looking it up, `run` stops with `E_BASE_REQUIRED` before changing anything.
+
+Calls behind these permissions:
+
+| Permission             | Calls                                                                                                                                                                                      |
+| :--------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actions: read`        | `GET /actions/workflows/{workflow}/runs` (last successful push run)                                                                                                                        |
+| `Contents: read`       | `GET /git/ref/heads/{branch}` (branch tips), `GET /releases/tags/{tag}`                                                                                                                    |
+| `Contents: write`      | `git push` of release PR branches and tags, `POST /releases`                                                                                                                               |
+| `Pull requests: read`  | `GET /pulls`, `GET /pulls/{n}`, `GET /commits/{sha}/pulls`                                                                                                                                 |
+| `Pull requests: write` | `POST /pulls`, `PATCH /pulls/{n}` (update, close)                                                                                                                                          |
+| `Issues: read`         | `GET /issues?labels=tallyrelease: pending` (finds release PRs; this endpoint has no pull request alternative)                                                                              |
+| `Issues: write`        | Labels and comments on release PRs: `GET /labels/{name}`, `POST /labels`, `GET`/`POST`/`DELETE /issues/{n}/labels`, `POST /issues/{n}/comments`. `Pull requests: write` also covers these. |
+
+Labels `tallyrelease: pending`, `tallyrelease: released` and `tallyrelease: stale` are created on first use. Create them up front to run without label creation rights.
+
+#### Minimal sets
+
+| Use                            | Permissions                                                                 |
+| :----------------------------- | :-------------------------------------------------------------------------- |
+| Read-only (`affected`, `plan`) | `Actions: read`, `Pull requests: read`                                      |
+| Dry run (`run --dry-run`)      | `Actions: read`, `Contents: read`, `Pull requests: read`, `Issues: read`    |
+| Full release (`run`)           | `Actions: read`, `Contents: write`, `Pull requests: write`, `Issues: write` |
+
+In a workflow:
+
+```yaml
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  issues: write
+```
+
+#### Token types
+
+| Token                         | Notes                                                                                                                                                                                                                                                  |
+| :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`                | Simplest. Pushes and PRs made with it trigger no workflows: release PRs get no CI, and the tag push starts nothing. Set `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` to `github-actions[bot]` and `41898282+github-actions[bot]@users.noreply.github.com`. |
+| GitHub App installation token | Recommended. Pushes trigger workflows. Grant the permissions above and set the commit identity with `GIT_AUTHOR_*` (and `GIT_COMMITTER_*`) to the App's bot name and email.                                                                            |
+| Fine-grained PAT              | Same permissions, limited to the repository. Pushes trigger workflows. Tied to a user and expires.                                                                                                                                                     |
+| Classic PAT                   | Scope `repo`. Add `workflow` only when version files live under `.github/workflows`.                                                                                                                                                                   |
+
+Release commits use `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` and `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` (the committer defaults to the author). Without them the identity is `tallyrelease <tallyrelease@users.noreply.github.com>`. Release commits are not signed.
+
+#### Repository rules
+
+- The token must push and force-push `tallyrelease/release/<branch>/<item>` branches. The push uses `--force-with-lease`, and deletes branches of closed release PRs.
+- It must create tags matching the unit tag formats, and move floating tags (a forced push).
+- Rulesets that restrict tag creation or update, or branches matching `tallyrelease/**`, need a bypass for the App or user.
+- Rulesets that require signed commits or linear history on `tallyrelease/release/**` reject release commits; exempt those branches or give the App a bypass.
+- Required status checks on the default branch need CI on the release PR. Use an App or PAT token, since `GITHUB_TOKEN` does not trigger it.
+- `Workflows` permission is not needed unless version files live under `.github/workflows`.
 
 ## Shadow mode
 
