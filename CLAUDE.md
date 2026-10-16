@@ -7,7 +7,7 @@ tallyrelease computes affected build units and release plans for monorepos and s
 Yarn 4 monorepo with Turbo orchestration. Names in parentheses are used for `turbo --filter`:
 
 - `packages/core` (`@tallyrelease/core`) - pure planning core and the plugin contract. Exports `.` and `./testing` (fakes: `memoryFs`, `memoryCtx`, `memoryGit`).
-- `packages/cli` (`@tallyrelease/cli`) - imperative shell, binary `tallyrelease`. Config loading, git, forge, CI integration, built-in plugins (`node`, `php`).
+- `packages/cli` (`@tallyrelease/cli`) - imperative shell, binary `tallyrelease`. Config loading, git, forge, CI integration, built-in plugins (`node`, `php`, `kustomize`).
 - `packages/tsconfig` (`@internal/tsconfig`) - shared TypeScript configs.
 
 ## Commands
