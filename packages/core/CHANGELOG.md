@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/abinnovision/tallyrelease/compare/core-v0.3.0...core-v0.3.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **core:** count prereleases from a unit's introduction without a line base ([#48](https://github.com/abinnovision/tallyrelease/issues/48)) ([06a591b](https://github.com/abinnovision/tallyrelease/commit/06a591b3522cf60ce5bde56e393f464617ffa101))
+
 ## [0.3.0](https://github.com/abinnovision/tally-release/compare/core-v0.2.0...core-v0.3.0) (2026-10-16)
 
 
