@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.2](https://github.com/abinnovision/tallyrelease/compare/cli-v0.3.1...cli-v0.3.2) (2026-10-16)
+
+
+### Bug Fixes
+
+* **cli:** commit releases as the configured git identity ([#53](https://github.com/abinnovision/tallyrelease/issues/53)) ([0b741b8](https://github.com/abinnovision/tallyrelease/commit/0b741b87ed8e00ffe4fd497e4b662e9a1796851c))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @tallyrelease/core bumped to 0.3.2
+
 ## [0.3.1](https://github.com/abinnovision/tallyrelease/compare/cli-v0.3.0...cli-v0.3.1) (2026-10-16)
 
 
