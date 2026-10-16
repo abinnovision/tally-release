@@ -13,6 +13,7 @@ import type { ChangelogInput } from "./changelog.js";
 import type { PlanChange } from "./plan.js";
 import type { Change } from "./plugin.js";
 
+// Repository URL in the release-please written CHANGELOG sections.
 const REPO = "https://github.com/abinnovision/tally-release";
 
 /** The plan change of a commit, as the conventional-commits source yields it. */
