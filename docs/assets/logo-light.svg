@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" width="420" height="96" role="img" aria-label="tallyrelease">
+  <title>tallyrelease</title>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#1f2328" stroke-width="8">
+      <path d="M16 30V76"/><path d="M32 30V76"/><path d="M48 30V76"/><path d="M64 30V76"/>
+    </g>
+    <path d="M6 74L88 21" stroke="#0f9b8e" stroke-width="8"/>
+    <path d="M72 20H90V38" stroke="#0f9b8e" stroke-width="8"/>
+  </g>
+  <text x="116" y="62" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="44" letter-spacing="-1" fill="#1f2328"><tspan font-weight="800">tally</tspan><tspan font-weight="400" fill="#0f9b8e">release</tspan></text>
+</svg>
