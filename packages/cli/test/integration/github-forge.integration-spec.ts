@@ -108,11 +108,13 @@ describe("github forge", () => {
 			number: number,
 			base: string,
 			mergedAt: string | null = null,
+			fullName = "acme/repo",
 		) => ({
 			number,
 			head: {
 				ref: `tallyrelease/release/${base}/shared`,
 				sha: `h${String(number)}`,
+				repo: { full_name: fullName },
 			},
 			base: { ref: base },
 			body: `body ${String(number)}`,
@@ -125,7 +127,7 @@ describe("github forge", () => {
 			routes = {
 				"GET /repos/acme/repo/issues": [
 					200,
-					[1, 2, 3, 4, 5, 6].map((number) => ({
+					[1, 2, 3, 4, 5, 6, 7].map((number) => ({
 						number,
 						...(number !== 3 && { pull_request: {} }),
 					})),
@@ -141,6 +143,11 @@ describe("github forge", () => {
 					pull(5, "main", "2026-01-01T00:00:00Z"),
 				],
 				"GET /repos/acme/repo/pulls/6": [200, pull(6, "main")],
+				// From a fork: never a release PR.
+				"GET /repos/acme/repo/pulls/7": [
+					200,
+					pull(7, "main", null, "fork/repo"),
+				],
 			};
 
 			const open = await forge().releasePrs(repo, {
@@ -208,6 +215,29 @@ describe("github forge", () => {
 				"GET /repos/acme/repo/pulls/1",
 				"GET /repos/acme/repo/pulls/2",
 			]);
+		});
+
+		it("finds the open PR of a head branch", async () => {
+			routes = {
+				"GET /repos/acme/repo/pulls": [200, [pull(3, "main")]],
+			};
+			const head = "tallyrelease/release/main/shared";
+
+			expect(await forge().openPr(repo, { head, base: "main" })).toMatchObject({
+				number: 3,
+				head,
+				headSha: "h3",
+			});
+			expect(requests[0]?.query).toEqual({
+				head: `acme:${head}`,
+				base: "main",
+				state: "open",
+			});
+
+			routes = { "GET /repos/acme/repo/pulls": [200, []] };
+			expect(
+				await forge().openPr(repo, { head, base: "main" }),
+			).toBeUndefined();
 		});
 
 		it("creates, updates and closes PRs", async () => {

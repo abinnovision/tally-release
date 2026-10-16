@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { memoryRepo } from "./harness/memory-repo.js";
 import { runCli } from "./harness/run-cli.js";
 
+import type { RunOptions } from "./harness/run-cli.js";
 import type { Dag } from "@tallyrelease/core/testing";
 
 const config = `
@@ -51,7 +52,7 @@ const dag: Dag = {
 };
 
 /** Runs `version` over a mutable working tree. */
-const setup = () => {
+const setup = (opts: RunOptions = {}) => {
 	const files = memoryGit(dag).tree("HEAD");
 	const before = { ...files };
 	const version = async (args: string[] = []) =>
@@ -66,6 +67,7 @@ const setup = () => {
 				GITHUB_SERVER_URL: "https://github.com",
 				GITHUB_REPOSITORY: "acme/repo",
 			},
+			...opts,
 		});
 
 	return { files, before, version };
@@ -131,6 +133,19 @@ describe("version", () => {
 			code: 0,
 			stdout: updated.map((p) => `would update ${p}\n`).join(""),
 			stderr: "",
+		});
+		expect(files).toEqual(before);
+	});
+
+	it("does nothing on pull request events", async () => {
+		const { files, before, version } = setup({
+			event: { name: "pull_request", payload: {} },
+		});
+		expect(await version()).toEqual({
+			code: 0,
+			stdout: "",
+			stderr:
+				"warning[W_EFFECT_SKIPPED]: version does nothing on pull_request events\n",
 		});
 		expect(files).toEqual(before);
 	});

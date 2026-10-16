@@ -247,7 +247,8 @@ export const versionFileClaims = async (
 /**
  * Files of a release of `items` (stable `next`): plugin version files,
  * templates and `<root>/CHANGELOG.md` per unit, read through `fs`. Returns
- * only files whose content changes; checks claims first. Templates skip first releases and warn
+ * only files whose content changes, and each unit's changelog section;
+ * checks claims first. Templates skip first releases and warn
  * `W_VERSION_FILE_NO_MATCH` without any match; a missing version file is
  * `E_VERSION_FILE_MISSING`.
  */
@@ -262,7 +263,12 @@ export const releaseFiles = async (
 		/** `YYYY-MM-DD` changelog heading date. */
 		date: string;
 	},
-): Promise<{ files: Map<string, string>; warnings: Warning[] }> => {
+): Promise<{
+	files: Map<string, string>;
+	/** Changelog section of each unit, by unit id. */
+	sections: Map<string, string>;
+	warnings: Warning[];
+}> => {
 	const { fs, items, repoUrl, date } = opts;
 	const pluginFiles = await versionFileClaims(workspace);
 	const schemes = schemeRegistry(workspace.schemes);
@@ -274,6 +280,7 @@ export const releaseFiles = async (
 	const pr = (item: ReleaseItem) =>
 		item.mode === "shared" ? "shared" : item.name;
 	const files = new Map<string, string>();
+	const sections = new Map<string, string>();
 	const warnings: Warning[] = [];
 	const read = (path: string) => files.get(path) ?? fs.read(path);
 	const required = (path: string, unit: string) => {
@@ -341,6 +348,7 @@ export const releaseFiles = async (
 				prUnits,
 			});
 			if (section !== undefined) {
+				sections.set(id, section);
 				const path =
 					unit.root === "." ? "CHANGELOG.md" : `${unit.root}/CHANGELOG.md`;
 				files.set(
@@ -353,6 +361,7 @@ export const releaseFiles = async (
 
 	return {
 		files: new Map([...files].filter(([path, c]) => fs.read(path) !== c)),
+		sections,
 		warnings,
 	};
 };

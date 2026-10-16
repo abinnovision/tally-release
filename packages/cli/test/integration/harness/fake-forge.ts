@@ -21,6 +21,13 @@ const pr = (remote: { prs: FakePr[] }, number: number): FakePr => {
 	return found;
 };
 
+const view = ({
+	title: _t,
+	state: _s,
+	comments: _c,
+	...p
+}: FakePr): ReleasePr => ({ ...p, labels: [...p.labels] });
+
 export interface FakePr extends ReleasePr {
 	title: string;
 	state: "open" | "closed";
@@ -85,12 +92,14 @@ export const fakeForge = (
 						: (a.mergedAt ?? "").localeCompare(b.mergedAt ?? ""),
 				);
 
-			return await Promise.resolve(
-				prs.map(({ title: _t, state: _s, comments: _c, ...p }) => ({
-					...p,
-					labels: [...p.labels],
-				})),
+			return await Promise.resolve(prs.map(view));
+		},
+		openPr: async (_repo, { head, base }) => {
+			const p = remote.prs.find(
+				(c) => c.head === head && c.base === base && c.state === "open",
 			);
+
+			return await Promise.resolve(p && view(p));
 		},
 		createPr: async (_repo, { head, base, title, body }) => {
 			call("createPr", { head, base, title });

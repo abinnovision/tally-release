@@ -54,8 +54,13 @@ export interface NewRelease {
 export interface Forge {
 	/** Head shas of successful push runs of a workflow on a branch, newest first. */
 	lastSuccessfulPushRuns: (query: WorkflowRunQuery) => Promise<string[]>;
-	/** PRs labelled `tallyrelease: pending` on a base branch. */
+	/** PRs labelled `tallyrelease: pending` on a base branch, from heads in this repository. */
 	releasePrs: (repo: RepoRef, query: ReleasePrQuery) => Promise<ReleasePr[]>;
+	/** Open PR from `head` in this repository into `base`, whatever its labels. */
+	openPr: (
+		repo: RepoRef,
+		query: { head: string; base: string },
+	) => Promise<ReleasePr | undefined>;
 	/** Returns the PR number. */
 	createPr: (repo: RepoRef, pr: NewPr) => Promise<number>;
 	updatePr: (

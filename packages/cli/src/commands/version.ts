@@ -1,5 +1,6 @@
 import { computePlan, releaseFiles, releaseItems } from "@tallyrelease/core";
 
+import { effectSkipped } from "./effects.js";
 import { planOptions } from "./plan.js";
 
 import type { Session } from "../session.js";
@@ -17,30 +18,40 @@ export const applyVersions = async (
 	session: Session,
 	flags: VersionFlags,
 ): Promise<void> => {
+	if (effectSkipped(session, "version")) {
+		return;
+	}
+
 	const setup = await planOptions(session, flags);
 	const repoUrl = await session.repoUrl();
 	const date = session.clock().toISOString().slice(0, 10);
-	const { files, warnings } = await session.workspaceAt(
-		null,
-		async (workspace, fs) => {
-			const plan = await computePlan(workspace, session.git, {
-				...setup.opts,
-				fs,
-				all: true,
-			});
-			const written = await releaseFiles(workspace, plan, {
-				fs,
-				items: releaseItems(workspace, plan),
-				repoUrl,
-				date,
-			});
+	const result = await session.workspaceAt(null, async (workspace, fs) => {
+		const plan = await computePlan(workspace, session.git, {
+			...setup.opts,
+			fs,
+			all: true,
+		});
+		if (effectSkipped(session, "version", plan)) {
+			return undefined;
+		}
 
-			return {
-				files: written.files,
-				warnings: [...plan.warnings, ...setup.warnings, ...written.warnings],
-			};
-		},
-	);
+		const written = await releaseFiles(workspace, plan, {
+			fs,
+			items: releaseItems(workspace, plan),
+			repoUrl,
+			date,
+		});
+
+		return {
+			files: written.files,
+			warnings: [...plan.warnings, ...setup.warnings, ...written.warnings],
+		};
+	});
+	if (result === undefined) {
+		return;
+	}
+
+	const { files, warnings } = result;
 	session.warn(warnings);
 
 	const lines = [...files].map(([path, content]) => {

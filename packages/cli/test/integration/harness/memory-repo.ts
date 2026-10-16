@@ -63,6 +63,16 @@ export const memoryRepo = (
 			isShallow: () => false,
 			branch: () => "main",
 			defaultBranch: () => undefined,
+			commitDate: (ref) => {
+				const id = resolve(ref);
+				const i = dag.commits.findIndex((c) => c.id === id);
+
+				// memoryGit's default commit dates.
+				return (
+					dag.commits[i]?.date ??
+					new Date(Date.UTC(2024, 0, 1, 0, i)).toISOString()
+				);
+			},
 		},
 		fs: memoryFs(base.tree("HEAD")),
 		fsAt: (ref) => memoryFs(base.tree(ref)),
