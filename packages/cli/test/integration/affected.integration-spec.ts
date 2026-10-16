@@ -334,6 +334,7 @@ describe("affected", () => {
 
 	it("forge errors warn and count as no last success", async () => {
 		const forge = {
+			...fakeForge(),
 			lastSuccessfulPushRuns: async () =>
 				await Promise.reject(
 					Object.assign(new Error("Bad Gateway"), { status: 502 }),

@@ -1,0 +1,215 @@
+import { TallyError } from "@tallyrelease/core";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { gitOk, git as run } from "./exec.js";
+
+/** Author and committer of release commits. */
+export const RELEASE_IDENTITY = {
+	name: "tallyrelease",
+	email: "tallyrelease@users.noreply.github.com",
+} as const;
+
+export interface PushOptions {
+	/** `--atomic`: every ref updates or none. */
+	atomic?: boolean;
+	/** `--force-with-lease` per remote ref: expected sha, `""` when the ref must not exist. */
+	leases?: Readonly<Record<string, string>>;
+	/** Auth header for an http(s) `origin`, replacing persisted checkout credentials. */
+	token?: string | undefined;
+}
+
+/** Git writes of effects; never touches the working tree, index or HEAD. */
+export interface GitWriter {
+	/**
+	 * Commit of `files` on top of `parent` with a fixed identity and both
+	 * dates set to `date`, so equal input gives an equal sha; not signed.
+	 */
+	commitFiles: (commit: {
+		parent: string;
+		files: ReadonlyMap<string, string>;
+		message: string;
+		date: string;
+	}) => Promise<string>;
+	/** Lightweight tag; no-op at `sha`, `E_TAG_EXISTS` elsewhere unless `force`. */
+	tag: (name: string, sha: string, opts?: { force?: boolean }) => Promise<void>;
+	/** Pushes refspecs to `origin`; a failed lease is `E_PUSH_LEASE`. */
+	push: (refspecs: readonly string[], opts?: PushOptions) => Promise<void>;
+}
+
+/** `GitWriter` backed by the `git` executable in `cwd`. */
+export const gitWriter = (
+	cwd: string,
+	debug?: (message: string) => void,
+): GitWriter => {
+	const ok = async (args: string[], env?: Record<string, string>) =>
+		(await gitOk(cwd, args, { debug, ...(env && { env }) })).trim();
+
+	// Config through the environment keeps the token out of argv and debug output.
+	const authEnv = async (token: string): Promise<Record<string, string>> => {
+		let url: URL;
+		try {
+			url = new URL(await ok(["remote", "get-url", "--push", "origin"]));
+		} catch {
+			return {};
+		}
+
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			return {};
+		}
+
+		const key = `http.${url.origin}/.extraheader`;
+		const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+
+		// GIT_CONFIG_COUNT also drops inherited GIT_CONFIG_KEY_n entries.
+		return {
+			GIT_CONFIG_COUNT: "2",
+			GIT_CONFIG_KEY_0: key,
+			GIT_CONFIG_VALUE_0: "",
+			GIT_CONFIG_KEY_1: key,
+			GIT_CONFIG_VALUE_1: `AUTHORIZATION: basic ${basic}`,
+		};
+	};
+
+	return {
+		commitFiles: async ({ parent, files, message, date }) => {
+			const dir = await mkdtemp(join(tmpdir(), "tallyrelease-index-"));
+			try {
+				const index = { GIT_INDEX_FILE: join(dir, "index") };
+				await ok(["read-tree", parent], index);
+
+				const paths = [...files.keys()];
+				if (paths.length > 0) {
+					// Existing paths keep their mode (100755, 120000); new ones are 100644.
+					const modes = new Map(
+						(
+							await ok(
+								["--literal-pathspecs", "ls-files", "-s", "-z", "--", ...paths],
+								index,
+							)
+						)
+							.split("\0")
+							.filter((line) => line !== "")
+							.map((line) => {
+								const [meta = "", path = ""] = line.split("\t");
+
+								return [path, meta.split(" ")[0]] as const;
+							}),
+					);
+					const blobs = await Promise.all(
+						paths.map(async (path, i) => {
+							const file = join(dir, `blob-${String(i)}`);
+							await writeFile(file, files.get(path) ?? "");
+
+							return file;
+						}),
+					);
+					const shas = (
+						await ok(["hash-object", "-w", "--no-filters", "--", ...blobs])
+					).split("\n");
+					await ok(
+						[
+							"update-index",
+							"--add",
+							...paths.flatMap((path, i) => [
+								"--cacheinfo",
+								`${modes.get(path) ?? "100644"},${shas[i] ?? ""},${path}`,
+							]),
+						],
+						index,
+					);
+				}
+
+				const tree = await ok(["write-tree"], index);
+
+				return await ok(
+					[
+						"-c",
+						"commit.gpgsign=false",
+						"commit-tree",
+						tree,
+						"-p",
+						parent,
+						"-m",
+						message,
+					],
+					{
+						GIT_AUTHOR_NAME: RELEASE_IDENTITY.name,
+						GIT_AUTHOR_EMAIL: RELEASE_IDENTITY.email,
+						GIT_AUTHOR_DATE: date,
+						GIT_COMMITTER_NAME: RELEASE_IDENTITY.name,
+						GIT_COMMITTER_EMAIL: RELEASE_IDENTITY.email,
+						GIT_COMMITTER_DATE: date,
+					},
+				);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		},
+		// update-ref, unlike `git tag`, ignores tag.gpgSign.
+		tag: async (name, sha, opts) => {
+			const ref = `refs/tags/${name}`;
+			const existing = await run(
+				cwd,
+				["rev-parse", "--verify", "--quiet", `${ref}^{commit}`],
+				{ debug },
+			);
+			const current = existing.code === 0 ? existing.stdout.trim() : undefined;
+			if (current === sha) {
+				return;
+			}
+
+			if (current !== undefined && opts?.force !== true) {
+				throw new TallyError(
+					"E_TAG_EXISTS",
+					`tag "${name}" exists at ${current}, not at ${sha}`,
+					{ tag: name, sha: current, expected: sha },
+				);
+			}
+
+			await ok(["update-ref", ref, sha]);
+		},
+		push: async (refspecs, opts = {}) => {
+			const args = [
+				"push",
+				"--porcelain",
+				"--no-verify",
+				...(opts.atomic ? ["--atomic"] : []),
+				...Object.entries(opts.leases ?? {}).map(
+					([ref, expected]) => `--force-with-lease=${ref}:${expected}`,
+				),
+				"origin",
+				...refspecs,
+			];
+			const env = {
+				GIT_TERMINAL_PROMPT: "0",
+				...(opts.token ? await authEnv(opts.token) : {}),
+			};
+			const result = await run(cwd, args, { debug, env });
+			if (result.code === 0) {
+				return;
+			}
+
+			if (result.stdout.includes("(stale info)")) {
+				throw new TallyError(
+					"E_PUSH_LEASE",
+					`push rejected, a remote ref moved since it was read: ${refspecs.join(" ")}`,
+					{ refspecs },
+				);
+			}
+
+			if (result.stdout.includes("(already exists)")) {
+				throw new TallyError(
+					"E_TAG_EXISTS",
+					`push rejected, a tag exists on the remote at another commit: ${refspecs.join(" ")}`,
+					{ refspecs },
+				);
+			}
+
+			throw new Error(
+				`git push failed (${String(result.code)}): ${result.stderr.trim()}`,
+			);
+		},
+	};
+};
