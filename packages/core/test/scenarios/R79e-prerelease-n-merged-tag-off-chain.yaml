@@ -1,0 +1,57 @@
+description: >-
+  A stable tag reached only through a merge is not a line base, so the counter
+  starts at the unit's introduction.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "0" }
+    - id: c1
+      files: { README.md: "1" }
+    - id: c2
+      message: "feat: add a"
+      files: { packages/a/index.ts: "2" }
+    - id: c3
+      message: "fix: on a side branch"
+      files: { packages/a/side.ts: "3" }
+    - id: c4
+      parents: [c2]
+      message: "feat: a"
+      files: { packages/a/index.ts: "4" }
+    - id: m
+      parents: [c4, c3]
+      message: Merge side
+    - id: c5
+      message: "fix: a"
+      files: { packages/a/index.ts: "5" }
+  tags:
+    - { name: a-v1.0.0, commit: c3 }
+base: m
+plan: {}
+expect:
+  facts:
+    units:
+      - id: a
+        baseTag: { name: a-v1.0.0 }
+        lineBaseTag: null
+        introduced: c2
+        sinceLineBase: 4
+        total: 6
+  plan:
+    units:
+      - {
+          id: a,
+          kind: prerelease,
+          from: 1.0.0,
+          next: 1.1.0,
+          version: 1.1.0-beta.4,
+        }
+    warnings: []

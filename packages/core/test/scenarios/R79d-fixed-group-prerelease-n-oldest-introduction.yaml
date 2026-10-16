@@ -1,0 +1,42 @@
+description: >-
+  A group without a line base counts from the oldest member introduction.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "0" }
+    - id: c1
+      message: "feat: add a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      files: { README.md: "2" }
+    - id: c3
+      message: "feat: add b"
+      files: { packages/b/index.ts: "3" }
+    - id: c4
+      message: "fix: b"
+      files: { packages/b/index.ts: "4" }
+base: c3
+plan: {}
+expect:
+  facts:
+    groups:
+      - { name: sdk, lineBaseTag: null, sinceLineBase: 4 }
+    units:
+      - { id: a, introduced: c1, sinceLineBase: 4, total: 5 }
+      - { id: b, introduced: c3, sinceLineBase: 2, total: 5 }
+  plan:
+    groups:
+      - { name: sdk, next: 1.0.0, version: 1.0.0-beta.4 }
+    warnings: []

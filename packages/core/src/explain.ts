@@ -29,6 +29,8 @@ export interface UnitExplanation {
 	unit: UnitPlan | null;
 	/** The unit's fixed group. */
 	group: { name: string; members: string[] } | null;
+	/** Origin of the prerelease counter without a line base; see `UnitFacts`. */
+	introduced: string | null;
 	/** What set `unit.next`: the bump, the initial version or a Release-As value. */
 	nextSource: "bump" | "initial" | "release-as" | null;
 	/** Changed unit files (reason `direct`) or changed global inputs (`global`). */
@@ -124,6 +126,7 @@ export const explainUnit = async (
 		plan,
 		unit,
 		group: group ? { name: group.name, members: [...group.members] } : null,
+		introduced: unitFacts?.introduced ?? null,
 		nextSource: releases.get(id)?.nextSource ?? null,
 		files,
 		changes,

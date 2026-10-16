@@ -56,6 +56,12 @@ export interface GitReader {
 	countFirstParent: (from: string | null, to: string) => MaybePromise<number>;
 	/** Tree-to-tree changed paths without rename detection, sorted. */
 	diffFiles: (from: string, to: string) => MaybePromise<readonly string[]>;
+	/**
+	 * Oldest commit on the first-parent chain of `to` whose diff to its first
+	 * parent (the empty tree for a root commit) touches a file under directory
+	 * `path`; null if none.
+	 */
+	introduced: (path: string, to: string) => MaybePromise<string | null>;
 }
 
 export interface TagRef {

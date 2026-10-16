@@ -72,6 +72,27 @@ const CONFORMANCE_DAG: Dag = {
 	],
 };
 
+/**
+ * First-parent chain r - s - t - u - m - v; k branches from r and merges into
+ * m. s adds pkg/ab, t adds pkg/a, u deletes it and v re-adds it. k adds side
+ * and gone, m drops gone and v adds it again.
+ */
+const INTRODUCED_DAG: Dag = {
+	commits: [
+		{ id: "r", files: { "lib/r.ts": "r\n" } },
+		{ id: "s", files: { "pkg/ab/x.ts": "s\n" } },
+		{
+			id: "k",
+			parents: ["r"],
+			files: { "side/k.ts": "k\n", "gone/x.ts": "k\n" },
+		},
+		{ id: "t", parents: ["s"], files: { "pkg/a/x.ts": "t\n" } },
+		{ id: "u", files: { "pkg/a/x.ts": null } },
+		{ id: "m", parents: ["u", "k"], files: { "gone/x.ts": null } },
+		{ id: "v", files: { "pkg/a/x.ts": "v\n", "gone/x.ts": "v\n" } },
+	],
+};
+
 /** In-memory `ReadonlyFs` over a path-to-content map. */
 export const memoryFs = (files: Record<string, string>): ReadonlyFs => {
 	const paths = Object.keys(files).sort(compare);
@@ -272,6 +293,19 @@ export const memoryGit = (dag: Dag): MemoryGit => {
 			return firstParentChain(to).filter((n) => !skip.has(n.id)).length;
 		},
 		diffFiles: (from, to) => changed(node(from).tree, node(to).tree),
+		introduced: (path, to) => {
+			const under = (p: string) => p === path || p.startsWith(`${path}/`);
+			const intro = firstParentChain(to)
+				.reverse()
+				.find((n) =>
+					changed(
+						n.parents[0] === undefined ? new Map() : node(n.parents[0]).tree,
+						n.tree,
+					).some(under),
+				);
+
+			return intro?.id ?? null;
+		},
 		tree: (ref) => Object.fromEntries(node(ref).tree),
 		parents: (ref) => [...node(ref).parents],
 	};
@@ -287,6 +321,7 @@ export type ReaderFactory = (
  * chain, c branches from b and merges into m, d renames pkg/x.ts to pkg/y.ts,
  * f adds a path with a quote, a tab and a non-ASCII character, g is empty and
  * h carries footers. `a` has a later committer date than b, c and d.
+ * `introduced` runs on its own fixture.
  */
 export const gitReaderConformance = (makeReader: ReaderFactory): void => {
 	describe("GitReader conformance", () => {
@@ -419,6 +454,38 @@ export const gitReaderConformance = (makeReader: ReaderFactory): void => {
 			expect((await git.log(sha("e"), sha("f"))).map((c) => c.files)).toEqual([
 				[ODD_PATH],
 			]);
+		});
+
+		describe("introduced", () => {
+			let intro: GitReader;
+			let introSha: (id: string) => string;
+			const introduced = async (path: string) =>
+				await intro.introduced(path, introSha("v"));
+
+			beforeAll(async () => {
+				({ git: intro, sha: introSha } = await makeReader(INTRODUCED_DAG));
+			});
+
+			it("finds the commit that adds a path on the chain", async () => {
+				expect(await introduced("lib")).toBe(introSha("r"));
+				expect(await introduced("pkg/ab")).toBe(introSha("s"));
+			});
+
+			it("attributes a path added on a side branch to the merge", async () => {
+				expect(await introduced("side")).toBe(introSha("m"));
+			});
+
+			it("matches whole directories and keeps the oldest commit", async () => {
+				expect(await introduced("pkg/a")).toBe(introSha("t"));
+			});
+
+			it("skips a merge identical to its first parent for the path", async () => {
+				expect(await introduced("gone")).toBe(introSha("v"));
+			});
+
+			it("returns null for a path no commit touches", async () => {
+				expect(await introduced("missing")).toBeNull();
+			});
 		});
 	});
 };

@@ -88,6 +88,8 @@ export const gitReader = (
 		return set;
 	};
 
+	const introductions = new Map<string, Promise<string | null>>();
+
 	const range = (from: string | null, to: string) =>
 		from === null ? [to] : [to, `^${from}`];
 
@@ -171,6 +173,25 @@ export const gitReader = (
 					"--",
 				]),
 			).sort(),
+		introduced: (path, to) => {
+			const key = `${to}\0${path}`;
+			let intro = introductions.get(key);
+			if (intro === undefined) {
+				intro = ok([
+					"log",
+					"--no-show-signature",
+					"--first-parent",
+					"--reverse",
+					"--format=%H",
+					to,
+					"--",
+					`:(top,literal)${path}`,
+				]).then((out) => lines(out)[0] ?? null);
+				introductions.set(key, intro);
+			}
+
+			return intro;
+		},
 		resolve,
 		mergeBase: async (a, b) => {
 			const result = await run(cwd, ["merge-base", a, b], { debug });

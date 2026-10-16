@@ -1,0 +1,38 @@
+description: >-
+  A unit added on a side branch is introduced by the merge commit on the
+  first-parent chain.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "0" }
+    - id: c1
+      message: "feat: add a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      parents: [c0]
+      files: { README.md: "2" }
+    - id: m
+      parents: [c2, c1]
+      message: Merge side
+    - id: c3
+      message: "fix: a"
+      files: { packages/a/index.ts: "3" }
+base: m
+plan: {}
+expect:
+  facts:
+    units:
+      - { id: a, introduced: m, sinceLineBase: 2, total: 4 }
+  plan:
+    units:
+      - { id: a, kind: prerelease, next: 1.0.0, version: 1.0.0-beta.2 }
+    warnings: []

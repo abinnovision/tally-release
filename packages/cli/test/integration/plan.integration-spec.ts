@@ -320,6 +320,33 @@ describe("explain", () => {
 		expect(unknown.code).toBe(1);
 		expect(unknown.stderr).toBe('error[E_UNIT_UNKNOWN]: unknown unit "nope"\n');
 	});
+
+	it("prints the introduction of a unit without a line base (G39)", async () => {
+		const result = await runCli(
+			["explain", "a", "--base", "c1"],
+			memoryRepo({
+				commits: [
+					{
+						id: "c0",
+						files: {
+							"tallyrelease.yaml": [
+								"units:",
+								"  a: { release: true }",
+								"branches:",
+								"  - { name: main, line: default, channel: beta }",
+								"",
+							].join("\n"),
+						},
+					},
+					{ id: "c1", message: "feat: add a", files: { "a/x": "1" } },
+					{ id: "c2", message: "fix: a", files: { "a/x": "2" } },
+				],
+			}),
+		);
+		expect(result.stdout).toContain(
+			"release   first release -> 1.0.0 (minor), version 1.0.0-beta.2\n  introduced c1\n",
+		);
+	});
 });
 
 describe("plan --head", () => {

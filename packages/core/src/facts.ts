@@ -116,6 +116,15 @@ export interface UnitFacts {
 	readonly fromTag: UnitTag | null;
 	/** Highest stable tag on head's first-parent chain. */
 	readonly lineBaseTag: UnitTag | null;
+	/**
+	 * Without a line base and with a root other than `.`: the oldest commit on
+	 * head's first-parent chain that touches the unit root.
+	 */
+	readonly introduced: string | null;
+	/**
+	 * First-parent commits since the line base; without one, since and
+	 * including `introduced`, else `total`.
+	 */
 	readonly sinceLineBase: number;
 	readonly total: number;
 	/** Changes since the base tag attributed to this unit, core commit order. */
@@ -135,6 +144,7 @@ export interface GroupFacts {
 	readonly baseTag: UnitTag | null;
 	/** Highest stable member tag on head's first-parent chain. */
 	readonly lineBaseTag: UnitTag | null;
+	/** Without a line base, the max over the members. */
 	readonly sinceLineBase: number;
 }
 
@@ -300,12 +310,32 @@ export const collectPlanFacts = async (
 		return a.sha !== b.sha && (await isAncestor(a.sha, b.sha)) ? b : a;
 	};
 
+	/** Counter since the line base; without one, since the unit's introduction. */
+	const lineCount = async (root: string, lineBaseTag: UnitTag | null) => {
+		if (lineBaseTag) {
+			return {
+				introduced: null,
+				sinceLineBase: await countSince(lineBaseTag.sha),
+			};
+		}
+
+		const introduced = root === "." ? null : await git.introduced(root, head);
+
+		return {
+			introduced,
+			sinceLineBase:
+				introduced === null ? total : (await countSince(introduced)) + 1,
+		};
+	};
+
 	const bases = new Map<
 		string,
 		{
 			scheme: VersionScheme<any>;
 			baseTag: UnitTag | null;
 			lineBaseTag: UnitTag | null;
+			introduced: string | null;
+			sinceLineBase: number;
 		}
 	>();
 	for (const unit of workspace.units) {
@@ -329,11 +359,14 @@ export const collectPlanFacts = async (
 			}
 		}
 
-		bases.set(unit.id, { scheme, baseTag: stable.at(-1) ?? null, lineBaseTag });
+		bases.set(unit.id, {
+			scheme,
+			baseTag: stable.at(-1) ?? null,
+			lineBaseTag,
+			// eslint-disable-next-line no-await-in-loop -- one git call per unit
+			...(await lineCount(unit.root, lineBaseTag)),
+		});
 	}
-
-	const sinceLine = async (tag: UnitTag | null) =>
-		tag ? await countSince(tag.sha) : total;
 
 	const groups: GroupFacts[] = [];
 	for (const { name, members } of workspace.groups) {
@@ -354,8 +387,13 @@ export const collectPlanFacts = async (
 			members,
 			baseTag,
 			lineBaseTag,
-			// eslint-disable-next-line no-await-in-loop -- memoized per line base
-			sinceLineBase: await sinceLine(lineBaseTag),
+			sinceLineBase: lineBaseTag
+				? // eslint-disable-next-line no-await-in-loop -- memoized per line base
+					await countSince(lineBaseTag.sha)
+				: Math.max(
+						0,
+						...members.map((id) => bases.get(id)?.sinceLineBase ?? 0),
+					),
 		});
 	}
 
@@ -371,7 +409,7 @@ export const collectPlanFacts = async (
 			continue;
 		}
 
-		const { baseTag, lineBaseTag } = own;
+		const { baseTag, lineBaseTag, introduced, sinceLineBase } = own;
 		const group = groupOf.get(unit.id);
 		const fromTag = group ? group.baseTag : baseTag;
 		const rangeBase =
@@ -393,8 +431,8 @@ export const collectPlanFacts = async (
 			baseTag,
 			fromTag,
 			lineBaseTag,
-			// eslint-disable-next-line no-await-in-loop -- memoized per line base
-			sinceLineBase: await sinceLine(lineBaseTag),
+			introduced,
+			sinceLineBase,
 			total,
 			changes: changes.filter((c) => c.units.includes(unit.id)),
 			releaseAs: changes.flatMap(({ change }) =>
