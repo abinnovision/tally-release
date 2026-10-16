@@ -4,7 +4,7 @@
 	"description": "Pure planning core of tallyrelease",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/abinnovision/tally-release.git",
+		"url": "git+https://github.com/abinnovision/tallyrelease.git",
 		"directory": "packages/core"
 	},
 	"license": "Apache-2.0",

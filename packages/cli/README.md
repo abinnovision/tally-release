@@ -171,7 +171,7 @@ Use the `node_modules` path when the cli is installed. Use the CDN URL when ther
 
 ## Design
 
-See the [design document](https://github.com/abinnovision/tally-release/blob/main/docs/design.md).
+See the [design document](https://github.com/abinnovision/tallyrelease/blob/main/docs/design.md).
 
 ## Licence
 

@@ -1,6 +1,6 @@
 # @tallyrelease/core
 
-Pure planning core and plugin contract for [tallyrelease](https://github.com/abinnovision/tally-release). It does no I/O: files and git are read through the injected `ReadonlyFs`, `Ctx` and `GitReader`.
+Pure planning core and plugin contract for [tallyrelease](https://github.com/abinnovision/tallyrelease). It does no I/O: files and git are read through the injected `ReadonlyFs`, `Ctx` and `GitReader`.
 
 Most users want [`@tallyrelease/cli`](https://www.npmjs.com/package/@tallyrelease/cli) instead. Install this package to write an ecosystem plugin or to embed the planner.
 
@@ -22,7 +22,7 @@ export const example = definePlugin({
 });
 ```
 
-See `Plugin` in [`src/plugin.ts`](https://github.com/abinnovision/tally-release/blob/main/packages/core/src/plugin.ts) for the available hooks (`discover`, `edges`, `inputs`, `versionFiles`, `schemes`, `intent`).
+See `Plugin` in [`src/plugin.ts`](https://github.com/abinnovision/tallyrelease/blob/main/packages/core/src/plugin.ts) for the available hooks (`discover`, `edges`, `inputs`, `versionFiles`, `schemes`, `intent`).
 
 ## Testing
 
