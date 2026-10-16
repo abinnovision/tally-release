@@ -44,5 +44,5 @@ Every `make` target runs `tools/<target>.sh`; ordering and flags live in the scr
 ## Conventions
 
 - Node >=24, ESM only, Apache-2.0.
-- Commits follow Conventional Commits; tallyrelease versions `packages/core` and `packages/cli` through release PRs on `tallyrelease/release/main/shared`.
+- Commits follow Conventional Commits; tallyrelease versions `packages/core` and `packages/cli` as the fixed group `tallyrelease` (one version) through release PRs on `tallyrelease/release/main/shared`.
 - Keep comments short and about the current code.
