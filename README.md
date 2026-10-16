@@ -213,6 +213,12 @@ yarn test-unit
 yarn turbo test-integration
 ```
 
+## Acknowledgements
+
+tallyrelease builds on ideas from existing release tools. [release-please](https://github.com/googleapis/release-please) shaped the release PR flow, the changelog format and the tag names, and [Changesets](https://changesets.dev) informed how release intent and groups work. Affected builds borrow from task runners such as [turbo](https://turborepo.com), [Nx](https://nx.dev) and [moon](https://moonrepo.dev). See [Comparison](#comparison) for how they differ.
+
+tallyrelease was designed and written with help from AI coding assistants. The maintainers review the design, code and tests and are responsible for them.
+
 ## Licence
 
 Apache-2.0, see [LICENSE](LICENSE).
