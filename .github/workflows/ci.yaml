@@ -32,7 +32,7 @@ jobs:
       test-types: "unit,integration"
       source-units: ""
       dist-units: "packages/*"
-      tallyrelease: "shadow"
+      tallyrelease: "release"
 
   self-check:
     name: Self check

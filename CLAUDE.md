@@ -1,6 +1,6 @@
 # tallyrelease - Development Guide
 
-tallyrelease computes affected build units and release plans for monorepos and single repos. The full design is in `docs/design.md`. Current status: v0.3 (release effects: version files, release PRs, tags, forge releases). Release-please still owns versions in this repo until the switch.
+tallyrelease computes affected build units and release plans for monorepos and single repos. The full design is in `docs/design.md`. Current status: v0.3 (release effects: version files, release PRs, tags, forge releases). This repo releases itself with tallyrelease (app-stack `tallyrelease: release`); the release-please files stay until one full release cycle has passed.
 
 ## Packages
 
@@ -44,5 +44,5 @@ Every `make` target runs `tools/<target>.sh`; ordering and flags live in the scr
 ## Conventions
 
 - Node >=24, ESM only, Apache-2.0.
-- Commits follow Conventional Commits; release-please versions `packages/core` and `packages/cli`.
+- Commits follow Conventional Commits; tallyrelease versions `packages/core` and `packages/cli` through release PRs on `tallyrelease/release/main/shared`.
 - Keep comments short and about the current code.
