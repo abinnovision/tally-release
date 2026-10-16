@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=./node_modules/@tallyrelease/cli/dist/tallyrelease.schema.json
 plugins:
   node: {}
-# Mirrors release-please node-workspace and initial-version.
+# Dependents get a patch release with their dependencies; new units start at 0.1.0.
 defaults:
   propagate: patch
   initialVersion: 0.1.0
