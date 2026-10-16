@@ -1,6 +1,6 @@
 description: >-
   A stable tag reached only through a merge is the base tag but not the line
-  base, so the counter starts at the root.
+  base, so the counter starts at the unit's introduction.
 plugins:
   - name: stub
     units:

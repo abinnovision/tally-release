@@ -83,6 +83,10 @@ export const explain = async (
 		);
 	}
 
+	if (explanation.introduced !== null) {
+		lines.push(`  introduced ${short(explanation.introduced)}`);
+	}
+
 	if (explanation.changes.length > 0) {
 		lines.push(
 			"",

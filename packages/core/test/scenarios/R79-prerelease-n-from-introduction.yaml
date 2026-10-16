@@ -1,0 +1,36 @@
+description: >-
+  Without a line base the counter starts at the commit that introduces the
+  unit root, which gets 1.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { README.md: "0" }
+    - id: c1
+      files: { README.md: "1" }
+    - id: c2
+      files: { README.md: "2" }
+    - id: c3
+      message: "feat: add a"
+      files: { packages/a/index.ts: "3" }
+    - id: c4
+      message: "fix: a"
+      files: { packages/a/index.ts: "4" }
+base: c3
+plan: {}
+expect:
+  facts:
+    units:
+      - { id: a, lineBaseTag: null, introduced: c3, sinceLineBase: 2, total: 5 }
+  plan:
+    units:
+      - { id: a, kind: prerelease, next: 1.0.0, version: 1.0.0-beta.2 }
+    warnings: []

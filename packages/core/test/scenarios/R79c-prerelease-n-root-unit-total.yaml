@@ -1,0 +1,33 @@
+description: >-
+  A root unit without a line base counts every first-parent commit, including
+  an empty root commit.
+plugins:
+  - name: stub
+    units:
+      - { id: lib, root: "." }
+config:
+  plugins: { stub: {} }
+  units:
+    ".": { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      message: "chore: init"
+    - id: c1
+      message: "feat: lib"
+      files: { src/index.ts: "1" }
+    - id: c2
+      message: "fix: lib"
+      files: { src/index.ts: "2" }
+base: c1
+plan: {}
+expect:
+  facts:
+    units:
+      - { id: lib, introduced: null, sinceLineBase: 3, total: 3 }
+  plan:
+    units:
+      - { id: lib, kind: prerelease, next: 1.0.0, version: 1.0.0-beta.3 }
+    warnings: []
