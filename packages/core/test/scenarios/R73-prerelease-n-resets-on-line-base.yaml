@@ -1,0 +1,40 @@
+description: >-
+  A stable tag on the first-parent chain is the new line base: the next
+  prerelease counts from it. A maintenance tag merged back does not reset N
+  (R23).
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default, channel: beta }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore(release): a@1.1.0"
+      files: { packages/a/package.json: "1.1.0" }
+    - id: c3
+      message: "feat: b"
+      files: { packages/a/index.ts: "3" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: a-v1.1.0, commit: c2 }
+base: c2
+plan: {}
+expect:
+  plan:
+    units:
+      - id: a
+        lineBaseTag: a-v1.1.0
+        from: 1.1.0
+        next: 1.2.0
+        version: 1.2.0-beta.1
+    warnings: []

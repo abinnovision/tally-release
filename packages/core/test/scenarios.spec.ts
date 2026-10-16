@@ -13,6 +13,7 @@ import {
 	planEquals,
 	releaseFiles,
 	releaseItems,
+	withReleased,
 } from "../src/index.js";
 import { memoryFs, memoryGit } from "../src/testing.js";
 
@@ -62,9 +63,9 @@ interface Scenario {
 	branch?: string;
 	/**
 	 * Collects plan facts and computes the plan when set; with `fails` a plan
-	 * error is returned as `planError`.
+	 * error is returned as `planError`; `released` fills `plan.released`.
 	 */
-	plan?: { all?: boolean; fails?: boolean };
+	plan?: { all?: boolean; fails?: boolean; released?: boolean };
 	/**
 	 * With `plan`: release items, `planEquals` per marker, the changelog
 	 * section of each unit with a stable `next` and `releaseFiles` of all items.
@@ -162,15 +163,19 @@ const run = async (s: Scenario) => {
 				...opts,
 				fs,
 				all: s.plan.all ?? false,
-			}).catch((error: unknown) => {
-				if (!s.plan?.fails) {
-					throw error;
-				}
-
-				planError = error;
-
-				return undefined;
 			})
+				.then(async (p) =>
+					s.plan?.released ? await withReleased(workspace, p, { git }) : p,
+				)
+				.catch((error: unknown) => {
+					if (!s.plan?.fails) {
+						throw error;
+					}
+
+					planError = error;
+
+					return undefined;
+				})
 		: undefined;
 
 	const { markers = {}, changelog, files } = s.release ?? {};

@@ -269,12 +269,14 @@ export const fakeGitWriter = (
 
 /**
  * `dag` plus a squash merge of PR `number` (its head commit's files on top
- * of HEAD, id `merge-<number>`); marks the PR merged.
+ * of HEAD, id `merge-<number>`), or with `mergeCommit` a merge commit whose
+ * second parent is the PR head; marks the PR merged.
  */
 export const mergePr = (
 	dag: Dag,
 	remote: MemoryRemote,
 	number: number,
+	{ mergeCommit = false }: { mergeCommit?: boolean } = {},
 ): Dag => {
 	const p = pr(remote, number);
 	const head = remote.commits.get(p.headSha);
@@ -284,17 +286,34 @@ export const mergePr = (
 		Date.UTC(2025, 0, 1, 0, dag.commits.length),
 	).toISOString();
 	p.mergeCommitSha = id;
+	const tip = dag.commits.at(-1)?.id ?? "";
 
 	return {
 		...dag,
-		commits: [
-			...dag.commits,
-			{
-				id,
-				message: `${p.title} (#${String(number)})\n\n${p.body}`,
-				date: p.mergedAt,
-				files: head?.files ?? {},
-			},
-		],
+		commits: mergeCommit
+			? [
+					...dag.commits,
+					{
+						id: p.headSha,
+						parents: [head?.parent ?? tip],
+						message: p.title,
+						files: head?.files ?? {},
+					},
+					{
+						id,
+						parents: [tip, p.headSha],
+						message: `Merge pull request #${String(number)} from acme/${p.head}\n\n${p.title}`,
+						date: p.mergedAt,
+					},
+				]
+			: [
+					...dag.commits,
+					{
+						id,
+						message: `${p.title} (#${String(number)})\n\n${p.body}`,
+						date: p.mergedAt,
+						files: head?.files ?? {},
+					},
+				],
 	};
 };

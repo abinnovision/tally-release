@@ -1,0 +1,53 @@
+description: >-
+  Releases at two commits: the older commit first, then plan unit order
+  (topological, z before a) within one commit; catchUp marks releases not at
+  HEAD. Group members are listed per unit.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: z, root: packages/z }
+      - { id: g1, root: packages/g1 }
+      - { id: g2, root: packages/g2 }
+    edges:
+      - { from: z, to: a, reason: dependencies, pinned: false }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, propagate: rebuild }
+  groups:
+    g: { units: [g1, g2] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/index.ts: "0"
+        packages/z/index.ts: "0"
+        packages/g1/index.ts: "0"
+        packages/g2/index.ts: "0"
+    - id: c1
+      message: "chore(release): g@1.1.0"
+      files: { packages/g1/CHANGELOG.md: "1.1.0" }
+    - id: c2
+      message: "chore(release): a@1.0.1, z@1.0.1"
+      files: { packages/a/CHANGELOG.md: "1.0.1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: z-v1.0.0, commit: c0 }
+    - { name: g1-v1.0.0, commit: c0 }
+    - { name: g2-v1.0.0, commit: c0 }
+    - { name: g1-v1.1.0, commit: c1 }
+    - { name: g2-v1.1.0, commit: c1 }
+    - { name: a-v1.0.1, commit: c2 }
+    - { name: z-v1.0.1, commit: c2 }
+base: c0
+plan: { released: true }
+expect:
+  plan:
+    released:
+      - { id: g1, tag: g1-v1.1.0, releaseSha: c1, catchUp: true }
+      - { id: g2, tag: g2-v1.1.0, releaseSha: c1, catchUp: true }
+      - { id: z, tag: z-v1.0.1, releaseSha: c2, catchUp: false }
+      - { id: a, tag: a-v1.0.1, releaseSha: c2, catchUp: false }
+    warnings: []

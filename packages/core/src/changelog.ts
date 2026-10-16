@@ -1,8 +1,9 @@
+import { schemeRegistry } from "./schemes.js";
 import { renderTag } from "./tags.js";
 import { compare } from "./util.js";
 
 import type { PlanChange, Plan } from "./plan.js";
-import type { VersionScheme } from "./plugin.js";
+import type { Unit, VersionScheme } from "./plugin.js";
 import type { Workspace } from "./workspace.js";
 
 /** Commit types in section order; hidden sections list only breaking or Release-As changes. */
@@ -129,6 +130,10 @@ const headingVersion = <V>(
 
 	return raw === undefined ? undefined : scheme.parse(raw);
 };
+
+/** `<root>/CHANGELOG.md` of a unit. */
+export const changelogPath = (unit: Pick<Unit, "root">): string =>
+	unit.root === "." ? "CHANGELOG.md" : `${unit.root}/CHANGELOG.md`;
 
 export interface ChangelogDependency {
 	/** Manifest field, such as `dependencies`. */
@@ -333,4 +338,36 @@ export const updateChangelog = <V>(
 	return `${[preamble.join("\n").trimEnd(), section, rest]
 		.filter((part) => part !== "")
 		.join("\n\n")}\n`;
+};
+
+/**
+ * Top version section of unit `id`'s `<root>/CHANGELOG.md`, heading included,
+ * read through `read`; undefined without a file or a version section.
+ */
+export const releaseNotes = (
+	workspace: Workspace,
+	id: string,
+	read: (path: string) => string | undefined,
+): string | undefined => {
+	const unit = workspace.units.find((u) => u.id === id);
+	const scheme = unit && schemeRegistry(workspace.schemes).get(unit.scheme);
+	const content = unit && read(changelogPath(unit));
+	if (!scheme || content === undefined) {
+		return undefined;
+	}
+
+	const section: string[] = [];
+	for (const line of content.split("\n")) {
+		if (headingVersion(line, scheme) !== undefined) {
+			if (section.length > 0) {
+				break;
+			}
+		} else if (section.length === 0) {
+			continue;
+		}
+
+		section.push(line);
+	}
+
+	return section.length === 0 ? undefined : section.join("\n").trim();
 };

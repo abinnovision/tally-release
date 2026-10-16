@@ -1,4 +1,8 @@
-import { changelogSection, updateChangelog } from "./changelog.js";
+import {
+	changelogPath,
+	changelogSection,
+	updateChangelog,
+} from "./changelog.js";
 import { normalizeRoot } from "./discover.js";
 import { TallyError } from "./errors.js";
 import { runHook } from "./plugins.js";
@@ -349,8 +353,7 @@ export const releaseFiles = async (
 			});
 			if (section !== undefined) {
 				sections.set(id, section);
-				const path =
-					unit.root === "." ? "CHANGELOG.md" : `${unit.root}/CHANGELOG.md`;
+				const path = changelogPath(unit);
 				files.set(
 					path,
 					updateChangelog(read(path), section, { baseVersion: from, scheme }),
