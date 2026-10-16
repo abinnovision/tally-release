@@ -58,6 +58,13 @@ export const githubForge = (opts: GithubForgeOptions): Forge => {
 	const octokit = new Octokit({
 		auth: opts.token,
 		baseUrl: opts.baseUrl ?? "https://api.github.com",
+		// Failed requests surface as errors; the request log would also print expected 404s.
+		log: {
+			debug: () => undefined,
+			info: () => undefined,
+			warn: console.warn,
+			error: () => undefined,
+		},
 	});
 
 	const comment = async (repo: RepoRef, number: number, body: string) => {
