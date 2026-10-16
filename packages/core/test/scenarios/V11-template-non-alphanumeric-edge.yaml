@@ -1,0 +1,34 @@
+description: >-
+  A pattern starting with a non-alphanumeric literal has no left boundary, so
+  "@v{major}" matches inside "org/repo@v1" (actions-style uses: line).
+plugins:
+  - name: stub
+    units:
+      - { id: run, root: . }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    .:
+      versionFiles: [{ file: README.md, pattern: "@v{major}" }]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        i.ts: "0"
+        README.md: "    uses: org/repo@v1\n    uses: org/repo@v10\n"
+    - id: c1
+      message: "feat!: new inputs"
+      files: { i.ts: "1" }
+  tags:
+    - { name: v1.2.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+expect:
+  files:
+    README.md: "    uses: org/repo@v2\n    uses: org/repo@v10\n"
+  fileWarnings: []

@@ -1,0 +1,22 @@
+description: >-
+  Version file templates: a pattern without a version token is a config error.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/a:
+      versionFiles: [{ file: README.md, pattern: "{id}-latest" }]
+git:
+  commits:
+    - id: c0
+      files: { packages/a/i.ts: "0", README.md: "a\n" }
+base: null
+plan: { fails: true }
+expect:
+  planError:
+    code: E_CONFIG
+    details: { unit: a, pattern: "{id}-latest" }

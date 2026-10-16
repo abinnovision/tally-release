@@ -86,6 +86,23 @@ const unitOverlay = z.strictObject({
 				"Release PR of this ungrouped unit; set it on the group for grouped units. Defaults to defaults.releasePr.",
 		})
 		.exactOptional(),
+	versionFiles: z
+		.array(
+			z.strictObject({
+				file: z
+					.string()
+					.meta({ description: "File relative to the repository root." }),
+				pattern: z.string().meta({
+					description:
+						"Text holding the version, with {id}, {version}, {major}, {minor} and {patch}; needs a version token and literal text.",
+				}),
+			}),
+		)
+		.meta({
+			description:
+				"Text files updated on release: matches of pattern rendering a version from the previous release up to the next are replaced with the next version.",
+		})
+		.exactOptional(),
 });
 
 /** Schema of `tallyrelease.yaml`. */

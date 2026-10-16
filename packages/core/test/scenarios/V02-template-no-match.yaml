@@ -1,0 +1,43 @@
+description: >-
+  A pattern without any hit leaves the file unchanged and warns; a hit already
+  at next (v1 on 1.4.0 -> 1.4.1) is unchanged without a warning.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/a:
+      versionFiles: [{ file: README.md, pattern: "docs@{id}-v{major}" }]
+    packages/b:
+      versionFiles: [{ file: README.md, pattern: "{id}-v{major}" }]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        packages/a/i.ts: "0"
+        packages/b/i.ts: "0"
+        README.md: "uses b-v1\n"
+    - id: c1
+      message: "fix: both"
+      files: { packages/a/i.ts: "1", packages/b/i.ts: "1" }
+  tags:
+    - { name: a-v1.4.0, commit: c0 }
+    - { name: b-v1.4.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+expect:
+  paths: [packages/a/CHANGELOG.md, packages/b/CHANGELOG.md]
+  fileWarnings:
+    - code: W_VERSION_FILE_NO_MATCH
+      message: >-
+        version file pattern "docs@{id}-v{major}" of unit "a" matches nothing
+        in "README.md"
+      unit: a

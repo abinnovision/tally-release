@@ -30,6 +30,7 @@ export type {
 	ReleasePrMode,
 	TallyConfig,
 	UnitOverlay,
+	VersionTemplate,
 } from "./config.js";
 export type { Warning } from "./errors.js";
 export type { Graph, SourcedEdge } from "./graph.js";
@@ -86,4 +87,5 @@ export { activatePlugins } from "./plugins.js";
 export { planEquals, releaseEntries, releaseItems } from "./release-items.js";
 export { semver } from "./semver.js";
 export { validateRelease, validateTags } from "./validate.js";
+export { releaseFiles, versionFileClaims } from "./version-files.js";
 export { loadWorkspace } from "./workspace.js";

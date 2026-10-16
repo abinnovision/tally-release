@@ -11,6 +11,7 @@ import {
 	computePlan,
 	loadWorkspace,
 	planEquals,
+	releaseFiles,
 	releaseItems,
 } from "../src/index.js";
 import { memoryFs, memoryGit } from "../src/testing.js";
@@ -39,6 +40,8 @@ interface Stub {
 	schemes?: (keyof typeof SCHEMES)[];
 	/** Returned by an intent source for every range. */
 	changes?: Change[];
+	/** Version file paths by unit id; `write` puts the version on one line. */
+	versionFiles?: Record<string, string[]>;
 }
 
 const SCHEMES = { flutter };
@@ -63,12 +66,13 @@ interface Scenario {
 	 */
 	plan?: { all?: boolean; fails?: boolean };
 	/**
-	 * With `plan`: release items, `planEquals` per marker and the changelog
-	 * section of each unit with a stable `next`.
+	 * With `plan`: release items, `planEquals` per marker, the changelog
+	 * section of each unit with a stable `next` and `releaseFiles` of all items.
 	 */
 	release?: {
 		markers?: Record<string, MarkerRelease[]>;
 		changelog?: { date: string; repoUrl?: string };
+		files?: { date: string; repoUrl?: string };
 	};
 	expect?: Record<string, unknown>;
 	error?: { code: string; details?: Record<string, unknown> };
@@ -114,6 +118,14 @@ const stubPlugin = (stub: Stub): Plugin => {
 		}),
 		...(stub.changes && {
 			intent: [{ name: "stub", collect: () => stub.changes ?? [] }],
+		}),
+		...(stub.versionFiles && {
+			versionFiles: (_, unit) =>
+				(stub.versionFiles?.[unit.id] ?? []).map((path) => ({
+					path,
+					read: (content) => content.trim(),
+					write: (_content, next) => `${next}\n`,
+				})),
 		}),
 	};
 };
@@ -161,7 +173,7 @@ const run = async (s: Scenario) => {
 			})
 		: undefined;
 
-	const { markers = {}, changelog } = s.release ?? {};
+	const { markers = {}, changelog, files } = s.release ?? {};
 	const items = plan ? releaseItems(workspace, plan) : [];
 	const pr = (item: (typeof items)[number]) =>
 		item.mode === "shared" ? "shared" : item.name;
@@ -173,9 +185,24 @@ const run = async (s: Scenario) => {
 			.flatMap((i) => i.units);
 	};
 
+	const written =
+		plan && files
+			? await releaseFiles(workspace, plan, {
+					fs,
+					items,
+					repoUrl: files.repoUrl ?? null,
+					date: files.date,
+				})
+			: undefined;
+
 	const release = plan &&
 		s.release && {
 			items,
+			...(written && {
+				files: Object.fromEntries(written.files),
+				paths: [...written.files.keys()].sort(),
+				fileWarnings: written.warnings,
+			}),
 			equals: Object.fromEntries(
 				Object.entries(markers).map(([name, marker]) => [
 					name,

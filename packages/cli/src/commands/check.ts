@@ -1,4 +1,8 @@
-import { validateRelease, validateTags } from "@tallyrelease/core";
+import {
+	validateRelease,
+	validateTags,
+	versionFileClaims,
+} from "@tallyrelease/core";
 
 import { count } from "../output/count.js";
 
@@ -12,6 +16,7 @@ export const check = async (session: Session): Promise<void> => {
 	const workspace = await session.workspace();
 	session.warn(workspace.warnings);
 	validateRelease(workspace);
+	await versionFileClaims(workspace);
 	const released = workspace.units
 		.filter((u) => u.version !== "none")
 		.map((u) => u.id);

@@ -1,0 +1,56 @@
+import { computePlan, releaseFiles, releaseItems } from "@tallyrelease/core";
+
+import { planOptions } from "./plan.js";
+
+import type { Session } from "../session.js";
+
+export interface VersionFlags {
+	branch?: string;
+	dryRun?: boolean;
+}
+
+/**
+ * Writes version files and changelogs of all pending release items to the
+ * working tree and prints the changed paths.
+ */
+export const applyVersions = async (
+	session: Session,
+	flags: VersionFlags,
+): Promise<void> => {
+	const setup = await planOptions(session, flags);
+	const repoUrl = await session.repoUrl();
+	const date = session.clock().toISOString().slice(0, 10);
+	const { files, warnings } = await session.workspaceAt(
+		null,
+		async (workspace, fs) => {
+			const plan = await computePlan(workspace, session.git, {
+				...setup.opts,
+				fs,
+				all: true,
+			});
+			const written = await releaseFiles(workspace, plan, {
+				fs,
+				items: releaseItems(workspace, plan),
+				repoUrl,
+				date,
+			});
+
+			return {
+				files: written.files,
+				warnings: [...plan.warnings, ...setup.warnings, ...written.warnings],
+			};
+		},
+	);
+	session.warn(warnings);
+
+	const lines = [...files].map(([path, content]) => {
+		if (!flags.dryRun) {
+			session.writeFile(path, content);
+		}
+
+		return `${flags.dryRun ? "would update" : "updated"} ${path}\n`;
+	});
+	session.stdout.write(
+		lines.length > 0 ? lines.join("") : "no version files to update\n",
+	);
+};

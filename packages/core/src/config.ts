@@ -21,6 +21,17 @@ export interface UnitOverlay {
 	initialVersion?: string;
 	/** Ungrouped released units only; default `defaults.releasePr`. */
 	releasePr?: ReleasePrMode;
+	/** Templated text replacements written on release. */
+	versionFiles?: VersionTemplate[];
+}
+
+/**
+ * A text file holding a unit's version. `file` is relative to the repository
+ * root; `pattern` uses `{id}`, `{version}`, `{major}`, `{minor}` and `{patch}`.
+ */
+export interface VersionTemplate {
+	file: string;
+	pattern: string;
 }
 
 /** A branch rule; the first rule whose `name` matches the branch wins. */

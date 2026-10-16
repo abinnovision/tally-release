@@ -80,6 +80,8 @@ export interface Session {
 	readonly gitWriter: GitWriter;
 	readonly writeFile: (path: string, content: string) => void;
 	readonly clock: () => Date;
+	/** Web URL of the repository for changelog links, null when unknown. */
+	readonly repoUrl: () => Promise<string | null>;
 	readonly workspace: () => Promise<Workspace>;
 	/** Content of `path` at commit `ref`, undefined when absent. */
 	readonly readAt: (ref: string, path: string) => string | undefined;
@@ -99,6 +101,39 @@ export interface Session {
 	) => Promise<Plan>;
 	readonly warn: (warnings: readonly Warning[]) => void;
 }
+
+/**
+ * Https web URL of a git remote without credentials or `.git`, null when not
+ * recognised. URL remotes keep the hostname (no port), scp-style `user@host:path`
+ * maps to `https://host/path`.
+ */
+export const webUrl = (remote: string): string | null => {
+	const scp = /^[^@/]+@([^:/]+):(.+)$/.exec(remote);
+	let host: string;
+	let path: string;
+	if (scp) {
+		host = scp[1] ?? "";
+		path = scp[2] ?? "";
+	} else {
+		let url: URL;
+		try {
+			url = new URL(remote);
+		} catch {
+			return null;
+		}
+
+		if (!["https:", "http:", "ssh:", "git:"].includes(url.protocol)) {
+			return null;
+		}
+
+		host = url.hostname;
+		path = url.pathname;
+	}
+
+	path = path.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "");
+
+	return host && path ? `https://${host}/${path}` : null;
+};
 
 export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 	const root = resolve(deps.cwd, opts.cwd ?? ".");
@@ -169,6 +204,25 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 		return basename(root);
 	};
 
+	// GITHUB_SERVER_URL and GITHUB_REPOSITORY, else the origin url as https.
+	const repoUrl = async () => {
+		const server = deps.env["GITHUB_SERVER_URL"];
+		const repository = deps.env["GITHUB_REPOSITORY"];
+		if (server && repository) {
+			return `${server.replace(/\/+$/, "")}/${repository}`;
+		}
+
+		if (!onDisk) {
+			return null;
+		}
+
+		const origin = await runGit(root, ["remote", "get-url", "origin"], {
+			debug,
+		});
+
+		return origin.code === 0 ? webUrl(origin.stdout.trim()) : null;
+	};
+
 	const repoGit = deps.git ?? gitReader(root, debug);
 
 	const workspaceAt = async <T>(
@@ -229,6 +283,7 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 				writeFileSync(file, content);
 			}),
 		clock: deps.clock ?? (() => new Date()),
+		repoUrl,
 		workspace: async () =>
 			await workspaceAt(null, (workspace) => Promise.resolve(workspace)),
 		readAt: (ref, path) =>

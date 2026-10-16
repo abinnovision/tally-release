@@ -55,6 +55,14 @@ describe("check", () => {
 				},
 				"E_RELEASE_PR_SPLIT_EDGE",
 			],
+			[
+				{
+					"tallyrelease.yaml":
+						"plugins: { node: {} }\nunits:\n  .: { release: true, versionFiles: [{ file: package.json, pattern: 'x@{version}' }] }\n",
+					"package.json": "{}",
+				},
+				"E_VERSION_FILE_CLAIM",
+			],
 		];
 		for (const [files, code] of cases) {
 			// eslint-disable-next-line no-await-in-loop -- sequential cases

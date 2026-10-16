@@ -1,0 +1,27 @@
+description: >-
+  A first release (no from) leaves templates alone and does not warn; the
+  changelog is still written.
+plugins:
+  - name: stub
+    units:
+      - { id: run, root: actions/run }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    actions/run:
+      versionFiles: [{ file: README.md, pattern: "{id}-v{major}" }]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      message: "feat: first"
+      files: { actions/run/i.ts: "0", README.md: "run-v0\n" }
+base: null
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+expect:
+  paths: [actions/run/CHANGELOG.md]
+  fileWarnings: []

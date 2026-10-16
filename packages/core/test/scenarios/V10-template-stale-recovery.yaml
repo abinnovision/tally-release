@@ -1,0 +1,37 @@
+description: >-
+  After a stale merge the file holds the untagged run-v2; with from 1.4.0 and
+  next 3.0.0 it becomes run-v3, and a hit already at next is untouched.
+plugins:
+  - name: stub
+    units:
+      - { id: run, root: actions/run }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    actions/run:
+      versionFiles: [{ file: README.md, pattern: "{id}-v{major}" }]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { actions/run/i.ts: "0", README.md: "run-v1\n" }
+    - id: c1
+      message: "chore(release): run@2.0.0"
+      files: { actions/run/i.ts: "1", README.md: "run-v2\nrun-v3\n" }
+    - id: c2
+      message: "feat!: again\n\nRelease-As: 3.0.0"
+      files: { actions/run/i.ts: "2" }
+  tags:
+    - { name: run-v1.4.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  files: { date: "2026-10-15" }
+expect:
+  plan:
+    units: [{ id: run, from: 1.4.0, next: 3.0.0 }]
+  files:
+    README.md: "run-v3\nrun-v3\n"
+  fileWarnings: []
