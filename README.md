@@ -1,10 +1,10 @@
 # tallyrelease
 
-tallyrelease reads git history and a dependency graph supplied by ecosystem plugins to decide which units of a repository are affected by a change. A later milestone adds versioning and release effects (release PRs, tags, forge releases).
+tallyrelease reads git history and a dependency graph supplied by ecosystem plugins to decide which units of a repository are affected by a change. It also computes release plans and, from v0.3, runs the release effects (version files, release PRs, tags, forge releases).
 
 ## Status
 
-v0.1 ships the `affected`, `graph` and `check` commands, with release-please still owning versions. The versioning planner is next. See [docs/design.md](docs/design.md) for the design, milestones and decisions.
+v0.3 adds `version`, `pr`, `release` and `run` to `affected`, `graph`, `check`, `plan`, `explain` and `shadow`. Release-please still owns versions in this repo until the switch. See [docs/design.md](docs/design.md) for the design, milestones and decisions.
 
 ## Install
 
