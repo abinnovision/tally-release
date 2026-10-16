@@ -368,3 +368,53 @@ describe("affected", () => {
 		expect(result.warnings).toEqual(["W_NO_LAST_SUCCESS"]);
 	});
 });
+
+describe("affected with the kustomize plugin", () => {
+	const gitops: Dag = {
+		commits: [
+			{
+				id: "g0",
+				files: {
+					"tallyrelease.yaml": "plugins:\n  kustomize: {}\n",
+					"k8s/base/backend/kustomization.yaml":
+						"resources: [deployment.yaml]\n",
+					"k8s/base/backend/deployment.yaml": "0",
+					"k8s/applications/staging/kustomization.yaml":
+						"resources: [../../base/backend]\npatches:\n  - path: patch.yaml\n",
+					"k8s/applications/staging/patch.yaml": "0",
+					"k8s/applications/production/kustomization.yaml":
+						"resources: [../../base/backend]\n",
+				},
+			},
+			{ id: "g1", files: { "k8s/base/backend/deployment.yaml": "1" } },
+			{ id: "g2", files: { "k8s/applications/staging/patch.yaml": "2" } },
+		],
+	};
+	const run = async (base: string) => {
+		const result = await runCli(["affected", "--json", "--base", base], {
+			...memoryRepo(gitops),
+			env: actionsEnv,
+		});
+		expect(result).toMatchObject({ code: 0 });
+
+		return affectedDocSchema.parse(JSON.parse(result.stdout)).units;
+	};
+
+	it("marks applications of a changed base as dependent", async () => {
+		expect(await run("g0")).toMatchObject([
+			{
+				id: "k8s-applications-production",
+				reason: "dependent",
+				via: ["k8s-base-backend"],
+			},
+			{ id: "k8s-applications-staging", reason: "direct" },
+			{ id: "k8s-base-backend", reason: "direct" },
+		]);
+	});
+
+	it("marks only the changed application", async () => {
+		expect((await run("g1")).map((u) => u.id)).toEqual([
+			"k8s-applications-staging",
+		]);
+	});
+});

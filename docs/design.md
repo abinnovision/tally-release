@@ -630,6 +630,16 @@ units:
 
 Node defaults: discovery from `workspaces` (yarn/npm) or `pnpm-workspace.yaml`; a single-package repo is unit `.`; a workspace root `package.json` is not a unit unless overlaid. Global inputs: `yarn.lock`, `package-lock.json`, `pnpm-lock.yaml`, `.yarnrc.yml`, `.yarn/patches/**`, root `package.json` (workspace repos), root `tsconfig*.json`, `turbo.json`. Ids via `defaultUnitId`; `meta.node.packageName`; version source `file`. PHP: unit from root `composer.json` plus `composer.json` under `repositories[type=path].url` globs; edges from `require`/`require-dev` naming a local package (pinned only for exact constraints in `require`); version source `tag`, no version files; global input `composer.lock`.
 
+Kustomize (build-only): every directory with a `kustomization.yaml`, `kustomization.yml` or `Kustomization` is a unit, bases included. Ids are the path with `/` replaced by `-` (`k8s/applications/staging` is `k8s-applications-staging`; `.` uses the repo name), so a collision is fixed with a `units.<root>.id` overlay. Local `resources`, `bases`, `components` and other path fields (patches, generator files, Helm values) are read from the kustomization. A reference to another kustomization directory becomes an edge from the referenced unit to the referencing one (reason `resources: ../../base/backend`). A reference to a file or directory outside the unit root that is not a unit is added to the unit's `include`, so changes there affect every referencing unit. Remote, absolute and repo-escaping references are skipped; missing targets warn. Option `paths` (default `["**"]`) limits discovery to directory globs, which keeps the plugin away from directories owned by other plugins. There are no global inputs and no version files.
+
+```yaml
+# GitOps repo: which applications changed?
+plugins:
+  kustomize: { paths: ["k8s/**"] }
+```
+
+With `k8s/base/backend` and `k8s/applications/{staging,production}` referencing it, a change under the base marks the base as `direct` and both applications as `dependent`; a change in one application affects only that application.
+
 ### A.11 CI integration (`abinnovision/actions`)
 
 A JS action (`run-tallyrelease`, `node24` runtime) in `abinnovision/actions` runs the published cli.
