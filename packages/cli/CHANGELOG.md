@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0](https://github.com/abinnovision/tally-release/compare/cli-v0.2.0...cli-v0.3.0) (2026-10-16)
+
+
+### Features
+
+* **cli:** add kustomize plugin for affected detection ([#45](https://github.com/abinnovision/tally-release/issues/45)) ([781e6c5](https://github.com/abinnovision/tally-release/commit/781e6c5d96add66d27095aa85116889f4f885615))
+* **cli:** add release forge methods and a git writer ([#31](https://github.com/abinnovision/tally-release/issues/31)) ([608dfdf](https://github.com/abinnovision/tally-release/commit/608dfdfdbcf683f183dd818b06f54fb37aebb02e))
+* **cli:** add tallyrelease pr for shared and separate release PRs ([#34](https://github.com/abinnovision/tally-release/issues/34)) ([5dbb294](https://github.com/abinnovision/tally-release/commit/5dbb2944a6f9535511710cbcfa5c6ddfccb14fe8))
+* **cli:** add tallyrelease run and fill released in plans ([#36](https://github.com/abinnovision/tally-release/issues/36)) ([8d90546](https://github.com/abinnovision/tally-release/commit/8d905469ed398a6daaa0e09f4fd9eb9c4c79c818))
+* **cli:** write the releases list from tallyrelease run ([#37](https://github.com/abinnovision/tally-release/issues/37)) ([bc93e36](https://github.com/abinnovision/tally-release/commit/bc93e367b16fd3bcb8c76293e33cc6a58efe5eca))
+* **core:** add changelog writer, release items and PR marker ([#30](https://github.com/abinnovision/tally-release/issues/30)) ([e74244e](https://github.com/abinnovision/tally-release/commit/e74244ebc4752e3de39614159ef0761f1cd2a33c))
+* tag merged release PRs with tallyrelease release ([#35](https://github.com/abinnovision/tally-release/issues/35)) ([0058045](https://github.com/abinnovision/tally-release/commit/005804542b3f0b18a1a5afdb1a559231f8d10b4d))
+* write version files and changelogs with tallyrelease version ([#33](https://github.com/abinnovision/tally-release/issues/33)) ([5961ce0](https://github.com/abinnovision/tally-release/commit/5961ce0c56b7ddbb4bff2cf154d5b5556212e8cb))
+
+
+### Bug Fixes
+
+* **cli:** do not log expected 404 responses ([#43](https://github.com/abinnovision/tally-release/issues/43)) ([58b7461](https://github.com/abinnovision/tally-release/commit/58b74615123ce5b960f2022baf0e7a08014be777))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @tallyrelease/core bumped to 0.3.0
+
 ## [0.2.0](https://github.com/abinnovision/tally-release/compare/cli-v0.1.1...cli-v0.2.0) (2026-10-15)
 
 

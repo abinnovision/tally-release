@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/abinnovision/tally-release/compare/core-v0.2.0...core-v0.3.0) (2026-10-16)
+
+
+### Features
+
+* **cli:** add tallyrelease pr for shared and separate release PRs ([#34](https://github.com/abinnovision/tally-release/issues/34)) ([5dbb294](https://github.com/abinnovision/tally-release/commit/5dbb2944a6f9535511710cbcfa5c6ddfccb14fe8))
+* **cli:** add tallyrelease run and fill released in plans ([#36](https://github.com/abinnovision/tally-release/issues/36)) ([8d90546](https://github.com/abinnovision/tally-release/commit/8d905469ed398a6daaa0e09f4fd9eb9c4c79c818))
+* **core:** add changelog writer, release items and PR marker ([#30](https://github.com/abinnovision/tally-release/issues/30)) ([e74244e](https://github.com/abinnovision/tally-release/commit/e74244ebc4752e3de39614159ef0761f1cd2a33c))
+* tag merged release PRs with tallyrelease release ([#35](https://github.com/abinnovision/tally-release/issues/35)) ([0058045](https://github.com/abinnovision/tally-release/commit/005804542b3f0b18a1a5afdb1a559231f8d10b4d))
+* write version files and changelogs with tallyrelease version ([#33](https://github.com/abinnovision/tally-release/issues/33)) ([5961ce0](https://github.com/abinnovision/tally-release/commit/5961ce0c56b7ddbb4bff2cf154d5b5556212e8cb))
+
 ## [0.2.0](https://github.com/abinnovision/tally-release/compare/core-v0.1.1...core-v0.2.0) (2026-10-15)
 
 
