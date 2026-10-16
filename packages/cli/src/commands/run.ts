@@ -9,6 +9,7 @@ import { effectSkipped } from "./effects.js";
 import { planOptions, releasedPrs, writePlan } from "./plan.js";
 import { releasePrs } from "./pr.js";
 import { reconcile, withTags } from "./release.js";
+import { releaseEntries } from "../ci/releases.js";
 
 import type { Session } from "../session.js";
 import type { PlanFlags, PlanSetup } from "./plan.js";
@@ -96,17 +97,20 @@ export const run = async (session: Session, flags: RunFlags): Promise<void> => {
 		];
 
 		return {
-			...atHead,
-			released: await releasedFromTags(workspace, atHead, { git, tags }),
+			plan: {
+				...atHead,
+				released: await releasedFromTags(workspace, atHead, { git, tags }),
+			},
+			units: workspace.units,
 		};
 	});
 	const known = new Map(
 		reconciled.flatMap((r) => r.tags.map((t) => [t, r.number])),
 	);
 	const doc = {
-		...planned,
-		released: await releasedPrs(runSession, planned.released, known),
-		warnings: [...planned.warnings, ...setup.warnings],
+		...planned.plan,
+		released: await releasedPrs(runSession, planned.plan.released, known),
+		warnings: [...planned.plan.warnings, ...setup.warnings],
 	};
 	warn(doc.warnings);
 
@@ -116,5 +120,9 @@ export const run = async (session: Session, flags: RunFlags): Promise<void> => {
 		{ reconciled: new Set(reconciled.map((r) => r.number)) },
 	);
 
-	writePlan(runSession, { doc, base }, flags);
+	writePlan(
+		runSession,
+		{ doc, base, releases: releaseEntries(doc, planned.units) },
+		flags,
+	);
 };

@@ -101,3 +101,22 @@ export const planSchema = z.strictObject({
 
 // Fails to compile when the schema misses or adds a field of `Plan`.
 export const planSchemaExact: Equals<z.infer<typeof planSchema>, Plan> = true;
+
+/** One entry of the `releases` output of `run --github-output`. */
+export const releaseEntrySchema = z.strictObject({
+	id: z.string(),
+	path: z.string(),
+	kind: z.enum(["release", "prerelease"]),
+	version: z.string(),
+	channel: z.string().nullable(),
+	tag: z.string().nullable(),
+	/** Literal part of the tag format before `{version}`; null for prereleases. */
+	tagPrefix: z.string().nullable(),
+	sha: z.string(),
+	releaseSha: z.string(),
+	catchUp: z.boolean(),
+	pr: z.number().nullable(),
+	line: z.enum(["default", "maintenance"]),
+});
+
+export type ReleaseEntry = z.infer<typeof releaseEntrySchema>;

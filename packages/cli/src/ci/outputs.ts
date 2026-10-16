@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { ReleaseEntry } from "../plan-schema.js";
 import type { AffectedDoc } from "@tallyrelease/core";
 
 const multiline = (key: string, value: string): string => {
@@ -20,3 +21,8 @@ export const affectedGithubOutput = (doc: AffectedDoc): string =>
 
 /** `$GITHUB_OUTPUT` entry of `plan`: the path of the written plan document. */
 export const planGithubOutput = (path: string): string => `plan=${path}\n`;
+
+/** `$GITHUB_OUTPUT` entry of `run`: the compact JSON list of releases. */
+export const releasesGithubOutput = (
+	releases: readonly ReleaseEntry[],
+): string => `releases=${JSON.stringify(releases)}\n`;
