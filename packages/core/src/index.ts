@@ -68,6 +68,7 @@ export type { SemVer } from "./semver.js";
 export type { IntentEntry, Workspace, WorkspaceInput } from "./workspace.js";
 
 export { computeAffected } from "./affected.js";
+export { maintenanceCut } from "./branches.js";
 export {
 	changelogSection,
 	releaseNotes,

@@ -1,6 +1,7 @@
 import {
 	computePlan,
 	encodeMarker,
+	maintenanceCut,
 	releaseEntries,
 	releaseFiles,
 	releaseItems,
@@ -27,14 +28,24 @@ const TRUNCATED =
 
 const short = (sha: string) => sha.slice(0, 7);
 
-/** Per-unit changelog sections, cut to whole sections under the limit, then the marker. */
+/**
+ * Per-unit changelog sections and per-item maintenance notes, cut to whole
+ * blocks under the limit, then the marker.
+ */
 const prBody = (
-	items: readonly ReleaseItem[],
-	sections: ReadonlyMap<string, string>,
+	{
+		items,
+		sections,
+		notes,
+	}: {
+		items: readonly ReleaseItem[];
+		sections: ReadonlyMap<string, string>;
+		notes: ReadonlyMap<string, string>;
+	},
 	marker: string,
 ): string => {
-	const blocks = items.flatMap((item) =>
-		item.units.flatMap((id) => {
+	const blocks = items.flatMap((item) => [
+		...item.units.flatMap((id) => {
 			const section = sections.get(id);
 
 			return section === undefined
@@ -43,7 +54,8 @@ const prBody = (
 						`<details><summary>${id}: ${item.version}</summary>\n\n${section}\n</details>\n\n`,
 					];
 		}),
-	);
+		notes.get(item.name) ?? "",
+	]);
 	const budget = BODY_LIMIT - marker.length - TRUNCATED.length - 4;
 	let text = "";
 	for (const block of blocks) {
@@ -167,6 +179,20 @@ export const releasePrs = async (
 				return {
 					leaf,
 					items,
+					notes: new Map(
+						items.flatMap((item) => {
+							const cut = maintenanceCut(workspace, plan, item);
+
+							return cut
+								? [
+										[
+											item.name,
+											`**Maintenance line for ${item.name} ${cut.line}.** This PR releases a new major. To keep shipping fixes for ${cut.line}, cut the maintenance branch from the last ${cut.line} release (also possible later):\n\n\`\`\`\ngit push origin ${cut.tag}:refs/heads/${cut.branch}\n\`\`\`\n\n`,
+										] as const,
+									]
+								: [];
+						}),
+					),
 					title:
 						title.length <= TITLE_LIMIT
 							? title
@@ -254,7 +280,7 @@ export const releasePrs = async (
 				sha,
 				pr: open.get(branch),
 				lease: (await forge.branchSha(repo, branch)) ?? "",
-				body: prBody(d.items, d.sections, marker),
+				body: prBody(d, marker),
 			};
 		}),
 	);

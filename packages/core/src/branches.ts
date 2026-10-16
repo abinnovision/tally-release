@@ -1,8 +1,12 @@
 import { TallyError } from "./errors.js";
+import { schemeRegistry } from "./schemes.js";
 import { maxLevel } from "./util.js";
 
+import type { Plan } from "./plan.js";
 import type { BumpLevel } from "./plugin.js";
+import type { ReleaseItem as PrItem } from "./release-items.js";
 import type { BranchRule } from "./release.js";
+import type { Workspace } from "./workspace.js";
 
 const SPECIAL = /[\\^$.*+?()[\]{}|/]/gu;
 const PART = /\{(major|minor)\}|\*/gu;
@@ -306,4 +310,69 @@ export const checkLimits = (
 			},
 		);
 	}
+};
+
+/** A maintenance branch to cut at the last release of the previous major. */
+export interface MaintenanceCut {
+	branch: string;
+	tag: string;
+	/** `2.x`, or `2.3.x` for a `{minor}` rule. */
+	line: string;
+}
+
+/**
+ * The cut for `item` when a default-line plan releases a new major: the first
+ * maintenance rule with `{major}` and no `*` that targets the item or nothing,
+ * rendered from `from`, at the item's base tag; else undefined.
+ */
+export const maintenanceCut = (
+	workspace: Workspace,
+	plan: Plan,
+	item: PrItem,
+): MaintenanceCut | undefined => {
+	const base =
+		item.kind === "group"
+			? plan.groups.find((g) => g.name === item.name)
+			: plan.units.find((u) => u.id === item.name);
+	const unit = workspace.units.find((u) => u.id === item.units[0]);
+	const scheme = unit && schemeRegistry(workspace.schemes).get(unit.scheme);
+	if (
+		plan.line?.kind !== "default" ||
+		!scheme ||
+		!base?.from ||
+		!base.baseTag
+	) {
+		return undefined;
+	}
+
+	const from: unknown = scheme.parse(base.from);
+	const next: unknown = scheme.parse(item.version);
+	if (from === undefined || next === undefined) {
+		return undefined;
+	}
+
+	const { major, minor } = scheme.core(from);
+	const rule = workspace.release.branches.find(
+		(r) =>
+			r.line === "maintenance" &&
+			r.name.includes("{major}") &&
+			!r.name.includes("*") &&
+			((r.unit === null && r.group === null) ||
+				(item.kind === "group" ? r.group : r.unit) === item.name),
+	);
+	if (!rule || scheme.core(next).major <= major) {
+		return undefined;
+	}
+
+	const withMinor = rule.name.includes("{minor}");
+
+	return {
+		branch: rule.name
+			.replace("{major}", String(major))
+			.replace("{minor}", String(minor)),
+		tag: base.baseTag,
+		line: withMinor
+			? `${String(major)}.${String(minor)}.x`
+			: `${String(major)}.x`,
+	};
 };

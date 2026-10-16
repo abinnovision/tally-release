@@ -385,6 +385,27 @@ branches:
 		expect(methods()).toEqual(calls);
 	});
 
+	it("suggests a maintenance branch for a major release only", async () => {
+		const dag = repo(
+			config('  - { name: "release/{major}.x", line: maintenance }\n'),
+			["b"],
+		);
+		dag.commits.push({
+			id: "c2",
+			message: "feat(a)!: break a",
+			files: { "packages/a/x.ts": "1" },
+		});
+		const { remote, pr } = setup(dag);
+
+		expect((await pr()).code).toBe(0);
+		const body = remote.prs[0]?.body ?? "";
+		expect(body).toContain(
+			"**Maintenance line for a 1.x.** This PR releases a new major. To keep shipping fixes for 1.x, cut the maintenance branch from the last 1.x release (also possible later):\n\n```\ngit push origin a-v1.0.0:refs/heads/release/1.x\n```\n\n",
+		);
+		expect(body.match(/Maintenance line/gu)).toHaveLength(1);
+		expect(decodeMarker(body)?.releases).toHaveLength(2);
+	});
+
 	it("moves an item between its own PR and the shared PR (E20)", async () => {
 		const separate = config("units:\n  packages/a: { releasePr: separate }\n");
 		const dag = repo(separate);
