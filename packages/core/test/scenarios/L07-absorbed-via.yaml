@@ -1,0 +1,38 @@
+description: >-
+  A change absorbed from an unreleased dependency is listed with the unit it
+  came through.
+plugins:
+  - name: stub
+    units:
+      - { id: ui, root: packages/ui }
+      - { id: web, root: apps/web }
+    edges:
+      - { from: ui, to: web, reason: "dependencies: @s/ui", pinned: false }
+config:
+  plugins: { stub: {} }
+  units:
+    apps/web: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/ui/i.ts: "0", apps/web/i.ts: "0" }
+    - id: c1
+      message: "feat(ui): button"
+      files: { packages/ui/i.ts: "1" }
+  tags:
+    - { name: web-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  changelog: { date: "2026-10-15" }
+expect:
+  changelogs:
+    web: |-
+      ## 1.0.1 (2026-10-15)
+
+
+      ### Features
+
+      * **ui:** button (via ui)

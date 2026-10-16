@@ -1,0 +1,50 @@
+description: >-
+  defaults.releasePr separate makes every ungrouped unit its own item in a
+  separate PR, a unit overlay can keep a unit in the shared PR, and units
+  without a pending release form no item.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+      - { id: d, root: packages/d }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, releasePr: separate }
+  units:
+    packages/c: { releasePr: shared }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        {
+          packages/a/i.ts: "0",
+          packages/b/i.ts: "0",
+          packages/c/i.ts: "0",
+          packages/d/i.ts: "0",
+        }
+    - id: c1
+      message: "feat: all but d"
+      files:
+        { packages/a/i.ts: "1", packages/b/i.ts: "1", packages/c/i.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+    - { name: d-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release: {}
+expect:
+  items:
+    - name: a
+      kind: unit
+      mode: separate
+      units: [a]
+      version: 1.1.0
+      tags: [{ id: a, tag: a-v1.1.0 }]
+    - { name: b, kind: unit, mode: separate, units: [b], version: 1.1.0 }
+    - { name: c, kind: unit, mode: shared, units: [c], version: 1.1.0 }

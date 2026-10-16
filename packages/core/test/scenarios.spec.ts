@@ -5,12 +5,20 @@ import { parse } from "yaml";
 
 import { flutter } from "./fixtures/flutter.js";
 import { collectPlanFacts } from "../src/facts.js";
-import { computeAffected, computePlan, loadWorkspace } from "../src/index.js";
+import {
+	changelogSection,
+	computeAffected,
+	computePlan,
+	loadWorkspace,
+	planEquals,
+	releaseItems,
+} from "../src/index.js";
 import { memoryFs, memoryGit } from "../src/testing.js";
 
 import type {
 	Change,
 	EdgeDraft,
+	MarkerRelease,
 	Plugin,
 	TallyConfig,
 	UnitDraft,
@@ -54,6 +62,14 @@ interface Scenario {
 	 * error is returned as `planError`.
 	 */
 	plan?: { all?: boolean; fails?: boolean };
+	/**
+	 * With `plan`: release items, `planEquals` per marker and the changelog
+	 * section of each unit with a stable `next`.
+	 */
+	release?: {
+		markers?: Record<string, MarkerRelease[]>;
+		changelog?: { date: string; repoUrl?: string };
+	};
 	expect?: Record<string, unknown>;
 	error?: { code: string; details?: Record<string, unknown> };
 }
@@ -145,7 +161,45 @@ const run = async (s: Scenario) => {
 			})
 		: undefined;
 
+	const { markers = {}, changelog } = s.release ?? {};
+	const items = plan ? releaseItems(workspace, plan) : [];
+	const pr = (item: (typeof items)[number]) =>
+		item.mode === "shared" ? "shared" : item.name;
+	const prUnits = (id: string) => {
+		const own = items.find((i) => i.units.includes(id));
+
+		return items
+			.filter((i) => own && pr(i) === pr(own))
+			.flatMap((i) => i.units);
+	};
+
+	const release = plan &&
+		s.release && {
+			items,
+			equals: Object.fromEntries(
+				Object.entries(markers).map(([name, marker]) => [
+					name,
+					planEquals(marker, plan, workspace),
+				]),
+			),
+			changelogs: Object.fromEntries(
+				plan.units.flatMap((u) => {
+					const text =
+						changelog &&
+						changelogSection(workspace, plan, {
+							id: u.id,
+							repoUrl: changelog.repoUrl ?? null,
+							date: changelog.date,
+							prUnits: prUnits(u.id),
+						});
+
+					return text === undefined ? [] : [[u.id, text]];
+				}),
+			),
+		};
+
 	return {
+		...release,
 		units: workspace.units,
 		edges: workspace.graph.edges,
 		order: workspace.graph.order,

@@ -1,0 +1,45 @@
+description: >-
+  A group member without changes gets the heading and the release-please
+  linked-versions synchronize entry.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  groups:
+    sdk: { units: [a, b] }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/i.ts: "0", packages/b/i.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/i.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  changelog: { date: "2026-10-15", repoUrl: "https://github.com/o/r" }
+expect:
+  changelogs:
+    a: |-
+      ## [1.0.1](https://github.com/o/r/compare/a-v1.0.0...a-v1.0.1) (2026-10-15)
+
+
+      ### Bug Fixes
+
+      * a ([c1](https://github.com/o/r/commit/c1))
+    b: |-
+      ## [1.0.1](https://github.com/o/r/compare/b-v1.0.0...b-v1.0.1) (2026-10-15)
+
+
+      ### Miscellaneous Chores
+
+      * **b:** Synchronize sdk versions

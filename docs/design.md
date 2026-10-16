@@ -1,6 +1,6 @@
 # tallyrelease: design
 
-Status: v0.1 in progress. Packages: `@tallyrelease/core` (pure planning core) and `@tallyrelease/cli` (binary `tallyrelease`). Config file: `tallyrelease.yaml`. Labels: `tallyrelease: pending` / `tallyrelease: released` / `tallyrelease: stale`. Release branch: `tallyrelease/release/<branch>`. PR marker: `<!-- tallyrelease-plan:v1 ... -->`. Error codes `E_*`, warning codes `W_*`.
+Status: v0.1 in progress. Packages: `@tallyrelease/core` (pure planning core) and `@tallyrelease/cli` (binary `tallyrelease`). Config file: `tallyrelease.yaml`. Labels: `tallyrelease: pending` / `tallyrelease: released` / `tallyrelease: stale`. Release PR branches: `tallyrelease/release/<branch>/shared` and `tallyrelease/release/<branch>/<item>`. PR marker: `<!-- tallyrelease-plan:v1 ... -->`. Error codes `E_*`, warning codes `W_*`.
 
 Core function names: `discoverUnits()` in `discover.ts`, `buildGraph()` in `graph.ts`, `computeAffected()` in `affected.ts`, `computePlan()` in `plan.ts`. Plugin hooks keep the short names `discover` and `edges`.
 
@@ -40,6 +40,7 @@ Non-goals: building, packaging, publishing; forward-porting hotfixes; AI or heur
 | Build set       | Units owning files changed in `base..HEAD`, plus reverse-transitive dependents and the mates of affected group members; all units if a global input changed.                                                     |
 | Release set     | Released units with a pending bump since their base tag, including Changes absorbed from unreleased dependencies (A.7.6), after propagation and fixed groups.                                                    |
 | Group           | Fixed group (A.7.8): released units selected by `units` or `tags` that release together with one version. Tags and changelogs stay per unit.                                                                     |
+| Release item    | Ungrouped released unit or fixed group; releases as one. `releasePr` puts it in the shared release PR (`shared`, default) or its own (`separate`). The name `shared` is reserved.                                |
 | Initial version | Version of a unit's first release (`initialVersion`, else the scheme's initial version).                                                                                                                         |
 | Plan            | `plan.json` (schema 1). `affected.json` (schema 1) is the v0.1 subset.                                                                                                                                           |
 
@@ -217,6 +218,7 @@ export interface Change {
   scope?: string;
   subject: string;
   body?: string;
+  notes?: string; // BREAKING CHANGE footer text (v0.3)
   releaseAs?: { unit?: string; version: string }[]; // Release-As footers; unit from the qualified form <unit>@<version>
   pr?: number;
   date?: string;
@@ -227,7 +229,7 @@ Core built-ins (expressed through the contract, registered as internal plugin `c
 
 Commit order: `log` returns commits in any order (the cli reader uses `--topo-order`, `memoryGit` reverse declaration order; conformance checks that every commit is listed before its parents). Core never relies on it: every order-dependent rule sorts commits by committer date descending, compared as instants (`Date.parse`, since `%cI` carries offsets), then by sha ascending.
 
-Other pure exports: `renderFloatingTags(unit, version, tags, scheme)` (A.12, used by reconcile). `./testing` exports `memoryFs`, `memoryCtx`, `memoryGit` and `gitReaderConformance(makeReader)`, a shared spec suite run against `memoryGit` (core unit tests) and the real cli reader (cli integration), so both implementations agree on ancestry, first-parent counts, tag peeling and rename handling.
+Other pure exports (v0.3, A.12): `renderFloatingTags(unit, version, { tags, scheme, formats })`; `renderChangelogSection(input)`, `changelogSection(workspace, plan, { id, repoUrl, date, prUnits })` and `updateChangelog(content, section, { baseVersion, scheme })`; `encodeMarker(marker)` and `decodeMarker(body)`; `releaseItems(workspace, plan)`, `releaseEntries(items)` and `planEquals(marker, plan, workspace)`. `./testing` exports `memoryFs`, `memoryCtx`, `memoryGit` and `gitReaderConformance(makeReader)`, a shared spec suite run against `memoryGit` (core unit tests) and the real cli reader (cli integration), so both implementations agree on ancestry, first-parent counts, tag peeling and rename handling.
 
 **Flutter scheme sketch (paper only, validates the interface):**
 
@@ -462,6 +464,7 @@ interface UnitPlan {
     breaking: boolean;
     scope?: string;
     subject: string;
+    notes?: string; // BREAKING CHANGE footer text (v0.3)
     pr?: number;
     via?: string; // absorbed unit
     releaseAs?: string; // this commit's Release-As value for the unit, normalized; only values that parse
@@ -525,6 +528,8 @@ Unit overlays accept `tags` (labels such as `docker` or `npm`, same characters a
 
 `groups` (A.7.8) are fixed only: a map from a group name to `units` and/or `tags`. Moving a unit into a group switches its Release-As from override to max: an ungrouped unit's value sets `next`, a member's value only raises the group version.
 
+`releasePr` (v0.3, `shared` or `separate`, in `defaults`, ungrouped unit overlays and `groups.<name>`, default `shared`) picks the release PR of a release item (A.12). On a grouped unit it is `E_CONFIG` (set it on the group). An ungrouped released unit whose id is a group name, an item named `shared`, or an item name that is not a valid branch name component (leading or trailing `.`, `..`, trailing `.lock`) is `E_RELEASE_ITEM_NAME`. An edge whose effective policy propagates a patch (`auto` with a pinned edge, or `patch`) between released units of items in different release PRs is `E_RELEASE_PR_SPLIT_EDGE`, since one PR could ship a pin or a dependency release for a version the other PR has not released. `validateRelease` runs these checks, so `check` reports them. `tags.floating` formats accept only `{id}`, `{major}` and `{minor}` (else `E_CONFIG`).
+
 While release-please owns versions, do not use qualified `Release-As: <unit>@<version>` footers: release-please reads `core@1.0.0` as a version. Plain `Release-As: <version>` footers work in both.
 
 ```yaml
@@ -547,6 +552,7 @@ globalInputs: [".tool-versions"] # unioned with node defaults and tallyrelease.y
 # v0.2
 groups: # fixed: members release together with one version
   sdk: { units: [api-client, api-types] } # or { tags: [docker] }: released units with the tag
+  # v0.3: sdk: { units: [api-client, api-types], releasePr: separate }
 branches:
   - { name: main, line: default, channel: beta }
   - { name: "release/{major}.x", line: maintenance, group: sdk } # or unit: <id>; absolute check (A.7.9)
@@ -632,10 +638,10 @@ Shadow (v0.2) is not part of the action: each repo runs a standalone push-only w
 
 Every run on a line branch, after step 1 of A.4 (config, plugins, `discoverUnits()`, build base):
 
-1. **Reconcile (tagging).** List closed PRs with head `tallyrelease/release/<branch>`, base `<branch>`, `merged_at` set and label `tallyrelease: pending`, oldest first. The label is only a work queue for tagging; publishing never depends on it. For each PR, parse the marker `<!-- tallyrelease-plan:v1 base64({ head, releaseCommit, releases: [{ id, version, tag }] }) -->` and require:
+1. **Reconcile (tagging).** List closed PRs with head `tallyrelease/release/<branch>/shared` or `tallyrelease/release/<branch>/<item>`, base `<branch>`, `merged_at` set and label `tallyrelease: pending`, oldest first. The label is only a work queue for tagging; publishing never depends on it. For each PR, parse the marker `<!-- tallyrelease-plan:v1 base64({ head, releaseCommit, releases: [{ id, version, tag }] }) -->` and require:
    - `pr.head.sha == releaseCommit` (body and branch belong together; a racing rewrite fails this),
    - `merge_commit_sha` is an ancestor of HEAD,
-   - **plan equality:** `planAt(firstParent(merge_commit_sha))` yields a release set whose `{ id, version, tag }` equals the marker's `releases`. This accepts merge queues and "Update branch" merges where main moved without changing the release, and rejects merges whose versions would now differ.
+   - **plan equality** (`planEquals`): every marker release equals the `{ id, version, tag }` of that unit in `planAt(firstParent(merge_commit_sha))`, and every group the marker touches is complete. Pending items outside the marker are ignored, so merging one separate PR never makes the others stale. This accepts merge queues where main moved without changing the release, and rejects merges whose versions would now differ.
 
    Valid: create tags locally at `merge_commit_sha` (existing tag on the same sha: no-op; different sha: `E_TAG_EXISTS`), render floating tags with `renderFloatingTags()`, then `git push origin <tags>` (floating tags with `--force`). Invalidate the `GitReader` tag cache. Create forge releases (`make_latest: false` on maintenance lines). Relabel `tallyrelease: released`. Invalid: relabel `tallyrelease: stale` and comment why; no tags.
 
@@ -644,9 +650,11 @@ Every run on a line branch, after step 1 of A.4 (config, plugins, `discoverUnits
 
 **PR body size.** The marker carries only `{ head, releaseCommit, releases }`, never the full plan. The human changelog part is truncated with a note so the body stays under 60,000 characters (GitHub limit 65,536).
 
-**Floating tags** (`tags.floating`, tokens `{id}`, `{major}`, `{minor}`): `renderFloatingTags(unit, version, tags, scheme)` (pure, core) returns a name only if the released version is the highest stable version among all of the unit's tags that render to the same name. So `v1` moves to `1.4.3` on `release/1.x` while `v2` stays put, and a maintenance release never moves a newer line's tag.
+**Release PRs** (v0.3). Each pending release item (`releaseItems`: a group or an ungrouped released unit with a stable `next`) goes to the shared PR on `tallyrelease/release/<branch>/shared` (`releasePr: shared`) or to its own PR on `tallyrelease/release/<branch>/<item>` (`separate`). Every PR branch is a leaf under its line branch, so shared and separate PRs never conflict; a group is never split. The marker (`encodeMarker`, base64 of UTF-8 JSON through a pure helper) holds the releases of the PR's items only.
 
-**Changelog writer** (core, pure, not a plugin hook): `<root>/CHANGELOG.md`, section heading `## <version> (<date>)` where date is the newest attributed commit's committer date (deterministic across reruns). It replaces every existing section whose version is greater than the base tag version (untagged leftovers) with the single new section, so reruns and stale recoveries never duplicate sections.
+**Floating tags** (`tags.floating`, tokens `{id}`, `{major}`, `{minor}`): `renderFloatingTags(unit, version, { tags, scheme, formats })` (pure, core; `tags` are the unit's tag names) returns a name only if the released version is the highest stable version among all of the unit's tags that render to the same name. So `v1` moves to `1.4.3` on `release/1.x` while `v2` stays put, and a maintenance release never moves a newer line's tag.
+
+**Changelog writer** (core, pure, not a plugin hook, release-please format in `changelog.ts`): `<root>/CHANGELOG.md` per unit, also per group member, for stable releases only. Heading `## [<version>](<repo>/compare/<baseTag>...<tag>) (<date>)`, or `## <version> (<date>)` without a base tag or repo URL. The date is the date the release PR is generated, passed in by the cli (core reads no clock), so a rebuild on a later day changes the section; reconcile and plan equality compare releases, never file content. Sections: `⚠ BREAKING CHANGES` (the `BREAKING CHANGE` footer text, else the subject), `Features`, `Bug Fixes`, `Performance Improvements`, `Reverts`, hidden types only when breaking or carrying Release-As, then `Dependencies` (`* The following workspace dependencies were updated` / `  * <field>` / `    * <name> bumped to <version>`, from edge reasons, only for dependencies released in the same release PR). Breaking notes follow release-please: the last `BREAKING CHANGE` footer, its first paragraph on one line, list or `####` lines kept indented below. Entries `* **<scope>:** <subject> ([#<pr>](<repo>/issues/<pr>)) ([<sha7>](<repo>/commit/<sha>))`, absorbed ones with ` (via <unit>)`, sorted like release-please (scope and linked subject concatenated, compared with `localeCompare`, over changes in core commit order); a group member with nothing listed gets `* **<id>:** Synchronize <group> versions`. Without a repo URL there are no links. `updateChangelog` keeps the text before the first version heading (`##` or `###`, linked or plain), replaces every section whose version is greater than the base version (untagged leftovers; without a base version, sections not below the new one) with the new section on top, and creates `# Changelog` when the file is missing, so reruns and stale recoveries never duplicate sections. The release commit body has no line starting with a footer token, so squash merges add no footers.
 
 **Stale recovery.** A stale merge (plan equality fails) leaves the release commit on main without tags. The next plan still uses the old base tag; the `chore(release)` commit causes no bump; version file writers set versions to the new `next` and the changelog writer replaces the untagged section. The next release PR therefore contains exactly one changelog section above the base tag and version files equal to the new plan.
 
@@ -738,7 +746,7 @@ Built-in plugins in `packages/cli/src/plugins/**` use the public API only. Lint 
 
 | #   | Decision                          | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | :-- | :-------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E1  | Naming                            | Product `tallyrelease`, npm scope `@tallyrelease`. Packages `@tallyrelease/core` and `@tallyrelease/cli` (bin `tallyrelease`). Config `tallyrelease.yaml`. Labels `tallyrelease: *`, branch `tallyrelease/release/<branch>`.                                                                                                                                                                                                                               |
+| E1  | Naming                            | Product `tallyrelease`, npm scope `@tallyrelease`. Packages `@tallyrelease/core` and `@tallyrelease/cli` (bin `tallyrelease`). Config `tallyrelease.yaml`. Labels `tallyrelease: *`, release PR branches `tallyrelease/release/<branch>/shared` and `tallyrelease/release/<branch>/<item>`.                                                                                                                                                                |
 | E2  | Second v1 plugin                  | `php`.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | E3  | Publish core separately from v0.1 | Yes. The cli depends on it at runtime; plugin authors need its types and `./testing`.                                                                                                                                                                                                                                                                                                                                                                      |
 | E4  | Node engines                      | `>=24`.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

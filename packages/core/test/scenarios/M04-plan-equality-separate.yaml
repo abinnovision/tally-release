@@ -1,0 +1,38 @@
+description: >-
+  A separate release PR's marker holds only its item and is compared on that
+  item, so other pending items never make it stale.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: apps/a }
+      - { id: b, root: apps/b }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true, releasePr: separate }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { apps/a/i.ts: "0", apps/b/i.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { apps/a/i.ts: "1" }
+    - id: c2
+      message: "feat: b"
+      files: { apps/b/i.ts: "2" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release:
+  markers:
+    a: [{ id: a, version: 1.0.1, tag: a-v1.0.1 }]
+    b: [{ id: b, version: 1.1.0, tag: b-v1.1.0 }]
+    b-stale: [{ id: b, version: 1.0.1, tag: b-v1.0.1 }]
+expect:
+  items:
+    - { name: a, mode: separate, version: 1.0.1 }
+    - { name: b, mode: separate, version: 1.1.0 }
+  equals: { a: true, b: true, b-stale: false }

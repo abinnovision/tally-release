@@ -39,6 +39,22 @@ describe("check", () => {
 				},
 				"E_EDGE_UNKNOWN_UNIT",
 			],
+			[
+				{
+					"tallyrelease.yaml": "units:\n  shared: { release: true }\n",
+					"shared/x": "",
+				},
+				"E_RELEASE_ITEM_NAME",
+			],
+			[
+				{
+					"tallyrelease.yaml":
+						"defaults: { release: true, releasePr: separate }\nunits:\n  a: {}\n  b: {}\ndeps:\n  - { from: a, to: b, pinned: true }\n",
+					"a/x": "",
+					"b/x": "",
+				},
+				"E_RELEASE_PR_SPLIT_EDGE",
+			],
 		];
 		for (const [files, code] of cases) {
 			// eslint-disable-next-line no-await-in-loop -- sequential cases

@@ -1,0 +1,38 @@
+description: >-
+  A pinned edge between items in the same release PR and an unpinned edge
+  under propagate auto across release PRs are accepted.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+      - { id: c, root: packages/c }
+    edges:
+      - { from: a, to: b, reason: "dependencies: a", pinned: true }
+      - { from: a, to: c, reason: "dependencies: a", pinned: false }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/c: { releasePr: separate }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files:
+        { packages/a/i.ts: "0", packages/b/i.ts: "0", packages/c/i.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/i.ts: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: b-v1.0.0, commit: c0 }
+    - { name: c-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+release: {}
+expect:
+  items:
+    - { name: a, mode: shared, version: 1.0.1 }
+    - { name: b, mode: shared, version: 1.0.1 }

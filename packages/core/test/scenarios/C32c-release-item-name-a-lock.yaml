@@ -1,0 +1,20 @@
+description: >-
+  A released unit named a.lock is rejected: the item name does not form a
+  valid branch name.
+plugins:
+  - name: stub
+    units:
+      - { id: "a.lock", root: packages/x }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+git:
+  commits:
+    - id: c0
+      files: { packages/x/i.ts: "0" }
+base: c0
+plan: { fails: true }
+expect:
+  planError:
+    code: E_RELEASE_ITEM_NAME
+    details: { item: "a.lock" }

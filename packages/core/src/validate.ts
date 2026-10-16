@@ -1,5 +1,7 @@
 import { validateBranches } from "./branches.js";
 import { TallyError } from "./errors.js";
+import { validateFloating } from "./floating.js";
+import { validateReleaseItems } from "./release-items.js";
 import { schemeRegistry } from "./schemes.js";
 import { compileTagFormat, matchUnitTags, noMatchingTag } from "./tags.js";
 import { uniqueSorted } from "./util.js";
@@ -11,7 +13,8 @@ import type { Workspace } from "./workspace.js";
 /**
  * Release-only checks, never run by `affected`: scheme registry, schemes, tag
  * formats and initial versions of released units, group members, branch rules,
- * their absolute check targets and channels. Returns the scheme registry.
+ * their absolute check targets and channels, release items and floating tag
+ * formats. Returns the scheme registry.
  */
 export const validateRelease = (
 	workspace: Workspace,
@@ -94,6 +97,9 @@ export const validateRelease = (
 			);
 		}
 	}
+
+	validateReleaseItems(workspace);
+	validateFloating(workspace.release.floating);
 
 	return schemes;
 };

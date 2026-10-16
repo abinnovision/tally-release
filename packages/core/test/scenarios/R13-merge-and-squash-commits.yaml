@@ -1,7 +1,8 @@
 description: >-
   Merge commits are skipped, merged commits and squash commits are attributed
   to every unit they touch, a merged maintenance tag moves the base tag but not
-  the line base, and changes follow committer date order. Unknown explicit
+  the line base, and changes follow committer date order. A BREAKING CHANGE
+  footer sets breaking and notes. Unknown explicit
   units warn once.
 plugins:
   - name: stub
@@ -19,7 +20,7 @@ git:
     - id: c0
       files: { packages/a/index.ts: "0", packages/b/index.ts: "0" }
     - id: c1
-      message: "feat: squash (#12)\n\n* fix: a\n* fix: b\n\nRelease-As: b@2.0.0"
+      message: "feat: squash (#12)\n\n* fix: a\n* fix: b\n\nBREAKING CHANGE: new api\nRelease-As: b@2.0.0"
       date: "2024-01-31T23:00:00-02:00"
       files: { packages/a/index.ts: "1", packages/b/index.ts: "1" }
     - id: c2
@@ -52,7 +53,9 @@ expect:
         sinceLineBase: 4
         total: 5
         changes:
-          - { change: { sha: c1, type: feat, pr: 12 }, units: [a, b] }
+          - change:
+              { sha: c1, type: feat, breaking: true, notes: new api, pr: 12 }
+            units: [a, b]
         releaseAs: []
       - id: b
         baseTag: { name: b-v1.0.0 }

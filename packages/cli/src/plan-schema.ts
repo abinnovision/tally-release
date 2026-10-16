@@ -65,6 +65,7 @@ export const planSchema = z.strictObject({
 					breaking: z.boolean(),
 					scope: z.string().exactOptional(),
 					subject: z.string(),
+					notes: z.string().exactOptional(),
 					pr: z.number().exactOptional(),
 					via: z.string().exactOptional(),
 					releaseAs: z.string().exactOptional(),

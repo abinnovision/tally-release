@@ -8,7 +8,7 @@ import type { BumpLevel, Edge, Unit } from "./plugin.js";
  * unreleased units counts as an edge with the first hop's `pinned`; several
  * paths are OR-combined.
  */
-const releasedEdges = (
+export const releasedEdges = (
 	edges: readonly Edge[],
 	released: ReadonlySet<string>,
 ): Map<string, Map<string, boolean>> => {

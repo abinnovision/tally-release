@@ -1,0 +1,28 @@
+description: >-
+  A pinned edge under propagate auto between released units in different
+  release PRs is rejected.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+      - { id: b, root: packages/b }
+    edges:
+      - { from: a, to: b, reason: "dependencies: a", pinned: true }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  units:
+    packages/b: { releasePr: separate }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/i.ts: "0", packages/b/i.ts: "0" }
+    - id: c1
+      message: "fix: a"
+      files: { packages/a/i.ts: "1" }
+base: c0
+plan: { fails: true }
+expect:
+  planError:
+    code: E_RELEASE_PR_SPLIT_EDGE
+    details: { from: a, to: b, items: [a, b] }

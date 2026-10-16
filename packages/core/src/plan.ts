@@ -83,6 +83,7 @@ const planChanges = (intent: UnitIntent<unknown> | undefined): PlanChange[] =>
 			breaking: change.breaking,
 			...(change.scope === undefined ? {} : { scope: change.scope }),
 			subject: change.subject,
+			...(change.notes === undefined ? {} : { notes: change.notes }),
 			...(change.pr === undefined ? {} : { pr: change.pr }),
 			...(via === undefined ? {} : { via }),
 			...(releaseAs === undefined ? {} : { releaseAs }),
@@ -500,6 +501,8 @@ export interface PlanChange {
 	breaking: boolean;
 	scope?: string;
 	subject: string;
+	/** `BREAKING CHANGE` footer text. */
+	notes?: string;
 	pr?: number;
 	/** Absorbed unit the change came through. */
 	via?: string;

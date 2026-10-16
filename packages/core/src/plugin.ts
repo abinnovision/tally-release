@@ -194,6 +194,8 @@ export interface Change {
 	scope?: string;
 	subject: string;
 	body?: string;
+	/** `BREAKING CHANGE` footer text. */
+	notes?: string;
 	releaseAs?: ReleaseAsValue[];
 	pr?: number;
 	date?: string;

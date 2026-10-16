@@ -1,0 +1,52 @@
+description: >-
+  A squash-merged release commit whose message holds the full PR body
+  (changelog with a breaking section, marker) adds no bump, no Release-As and
+  no breaking change.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/i.ts: "0" }
+    - id: c1
+      message: |-
+        chore(release): a@2.0.0 (#9)
+
+        <details><summary>a: 2.0.0</summary>
+
+        ## [2.0.0](https://github.com/o/r/compare/a-v1.0.0...a-v2.0.0) (2026-10-15)
+
+
+        ### ⚠ BREAKING CHANGES
+
+        * drop x, see Release-As: 3.0.0
+
+        ### Features
+
+        * drop x ([c0](https://github.com/o/r/commit/c0))
+        </details>
+
+        <!-- tallyrelease-plan:v1 eyJoZWFkIjoiYzAiLCJyZWxlYXNlQ29tbWl0IjoiYzEiLCJyZWxlYXNlcyI6W119 -->
+      files: { packages/a/CHANGELOG.md: "1" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+base: c0
+plan: { all: true }
+expect:
+  facts:
+    units:
+      - id: a
+        changes:
+          - change: { sha: c1, type: chore, breaking: false, pr: 9 }
+        releaseAs: []
+  plan:
+    units:
+      - { id: a, kind: rebuild, bump: null, releaseAs: null, next: null }
+    warnings: []

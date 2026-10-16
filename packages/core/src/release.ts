@@ -1,6 +1,7 @@
+import { normalizeRoot } from "./discover.js";
 import { compare, maxLevel, uniqueSorted } from "./util.js";
 
-import type { TallyConfig } from "./config.js";
+import type { ReleasePrMode, TallyConfig } from "./config.js";
 import type { Warning } from "./errors.js";
 import type {
 	AttributedChange,
@@ -326,6 +327,15 @@ export interface ReleaseSettings {
 	readonly absorbed: "patch" | "minor";
 	/** In config order. */
 	readonly branches: readonly BranchRule[];
+	readonly releasePr: {
+		readonly default: ReleasePrMode;
+		/** Set by unit overlays, by unit id. */
+		readonly units: ReadonlyMap<string, ReleasePrMode>;
+		/** Set by groups, by group name. */
+		readonly groups: ReadonlyMap<string, ReleasePrMode>;
+	};
+	/** Floating tag formats. */
+	readonly floating: readonly string[];
 }
 
 /**
@@ -404,7 +414,10 @@ export const reach = (
 };
 
 /** Applies the defaults to `bumps` and `branches`. */
-export const releaseSettings = (config: TallyConfig): ReleaseSettings => ({
+export const releaseSettings = (
+	config: TallyConfig,
+	units: readonly Unit[],
+): ReleaseSettings => ({
 	bumps: new Map(Object.entries({ ...DEFAULT_TYPES, ...config.bumps?.types })),
 	absorbed: config.bumps?.absorbed ?? "patch",
 	preMajor: {
@@ -418,6 +431,24 @@ export const releaseSettings = (config: TallyConfig): ReleaseSettings => ({
 		unit: b.unit ?? null,
 		group: b.group ?? null,
 	})),
+	releasePr: {
+		default: config.defaults?.releasePr ?? "shared",
+		units: new Map(
+			Object.entries(config.units ?? {}).flatMap(([root, overlay]) => {
+				const unit = units.find((u) => u.root === normalizeRoot(root));
+
+				return unit && overlay.releasePr
+					? [[unit.id, overlay.releasePr] as const]
+					: [];
+			}),
+		),
+		groups: new Map(
+			Object.entries(config.groups ?? {}).flatMap(([name, group]) =>
+				group.releasePr ? [[name, group.releasePr] as const] : [],
+			),
+		),
+	},
+	floating: config.tags?.floating ?? [],
 });
 
 /**
