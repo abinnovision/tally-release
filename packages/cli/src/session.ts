@@ -20,7 +20,7 @@ import { githubForge } from "./forge/github.js";
 import { gitBlob, gitTreeFs, nodeFs } from "./fs-ctx.js";
 import { git as runGit } from "./git/exec.js";
 import { gitReader } from "./git/reader.js";
-import { gitWriter } from "./git/writer.js";
+import { gitWriter, identityFromEnv } from "./git/writer.js";
 import { painter } from "./output/paint.js";
 import { builtinPlugins } from "./plugins/index.js";
 
@@ -269,7 +269,8 @@ export const createSession = (deps: Deps, opts: GlobalOptions): Session => {
 			? (deps.forge ?? githubForge({ token, baseUrl: github?.apiUrl }))
 			: undefined,
 		token,
-		gitWriter: deps.gitWriter ?? gitWriter(root, debug),
+		gitWriter:
+			deps.gitWriter ?? gitWriter(root, debug, identityFromEnv(deps.env)),
 		writeFile:
 			deps.writeFile ??
 			((path, content) => {

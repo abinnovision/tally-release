@@ -5,11 +5,43 @@ import { join } from "node:path";
 
 import { gitOk, git as run } from "./exec.js";
 
-/** Author and committer of release commits. */
-export const RELEASE_IDENTITY = {
+export interface Ident {
+	name: string;
+	email: string;
+}
+
+/** Default author and committer of release commits. */
+export const RELEASE_IDENTITY: Ident = {
 	name: "tallyrelease",
 	email: "tallyrelease@users.noreply.github.com",
-} as const;
+};
+
+export interface CommitIdentity {
+	author: Ident;
+	committer: Ident;
+}
+
+/**
+ * Identity from `GIT_AUTHOR_*` and `GIT_COMMITTER_*`; the committer defaults
+ * to the author and each field to `RELEASE_IDENTITY` when empty.
+ */
+export const identityFromEnv = (
+	env: Readonly<Record<string, string | undefined>>,
+): CommitIdentity => {
+	const pick = (key: string) => (env[key] === "" ? undefined : env[key]);
+	const author = {
+		name: pick("GIT_AUTHOR_NAME") ?? RELEASE_IDENTITY.name,
+		email: pick("GIT_AUTHOR_EMAIL") ?? RELEASE_IDENTITY.email,
+	};
+
+	return {
+		author,
+		committer: {
+			name: pick("GIT_COMMITTER_NAME") ?? author.name,
+			email: pick("GIT_COMMITTER_EMAIL") ?? author.email,
+		},
+	};
+};
 
 export interface PushOptions {
 	/** `--atomic`: every ref updates or none. */
@@ -23,7 +55,7 @@ export interface PushOptions {
 /** Git writes of effects; never touches the working tree, index or HEAD. */
 export interface GitWriter {
 	/**
-	 * Commit of `files` on top of `parent` with a fixed identity and both
+	 * Commit of `files` on top of `parent` with the configured identity and both
 	 * dates set to `date`, so equal input gives an equal sha; not signed.
 	 */
 	commitFiles: (commit: {
@@ -42,6 +74,10 @@ export interface GitWriter {
 export const gitWriter = (
 	cwd: string,
 	debug?: (message: string) => void,
+	identity: CommitIdentity = {
+		author: RELEASE_IDENTITY,
+		committer: RELEASE_IDENTITY,
+	},
 ): GitWriter => {
 	const ok = async (args: string[], env?: Record<string, string>) =>
 		(await gitOk(cwd, args, { debug, ...(env && { env }) })).trim();
@@ -135,11 +171,11 @@ export const gitWriter = (
 						message,
 					],
 					{
-						GIT_AUTHOR_NAME: RELEASE_IDENTITY.name,
-						GIT_AUTHOR_EMAIL: RELEASE_IDENTITY.email,
+						GIT_AUTHOR_NAME: identity.author.name,
+						GIT_AUTHOR_EMAIL: identity.author.email,
 						GIT_AUTHOR_DATE: date,
-						GIT_COMMITTER_NAME: RELEASE_IDENTITY.name,
-						GIT_COMMITTER_EMAIL: RELEASE_IDENTITY.email,
+						GIT_COMMITTER_NAME: identity.committer.name,
+						GIT_COMMITTER_EMAIL: identity.committer.email,
 						GIT_COMMITTER_DATE: date,
 					},
 				);
