@@ -123,6 +123,7 @@ With `--github-output`, `run` writes two outputs to `$GITHUB_OUTPUT`:
 | `catchUp`    | `true` for a release whose commit is not HEAD.                                                                                                                                                      |
 | `pr`         | Number of the release PR, else `null`.                                                                                                                                                              |
 | `line`       | `default` or `maintenance`.                                                                                                                                                                         |
+| `changes`    | Changes in the shape of the plan's `units[].changes`: those of the release, or for a prerelease those since the last stable release.                                                                |
 
 The entry schema is `releaseEntrySchema` in `src/plan-schema.ts`.
 

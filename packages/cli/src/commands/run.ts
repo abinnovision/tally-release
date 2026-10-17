@@ -8,7 +8,7 @@ import {
 import { effectSkipped } from "./effects.js";
 import { planOptions, releasedPrs, writePlan } from "./plan.js";
 import { releasePrs } from "./pr.js";
-import { reconcile, withTags } from "./release.js";
+import { planAtParent, reconcile, withTags } from "./release.js";
 import { releaseEntries } from "../ci/releases.js";
 
 import type { Session } from "../session.js";
@@ -120,9 +120,25 @@ export const run = async (session: Session, flags: RunFlags): Promise<void> => {
 		{ reconciled: new Set(reconciled.map((r) => r.number)) },
 	);
 
+	// Plan units at the parent of each release sha, reused from reconcile.
+	const atParent = new Map(reconciled.map((r) => [r.sha, r.units]));
+	/* eslint-disable no-await-in-loop -- few distinct release shas */
+	for (const { releaseSha } of flags.githubOutput ? doc.released : []) {
+		if (!atParent.has(releaseSha)) {
+			const { plan } = await planAtParent(runSession, {
+				git,
+				opts: setup.opts,
+				mergeSha: releaseSha,
+				releases: undefined,
+			});
+			atParent.set(releaseSha, plan?.plan.units ?? []);
+		}
+	}
+	/* eslint-enable no-await-in-loop */
+
 	writePlan(
 		runSession,
-		{ doc, base, releases: releaseEntries(doc, planned.units) },
+		{ doc, base, releases: releaseEntries(doc, planned.units, atParent) },
 		flags,
 	);
 };
