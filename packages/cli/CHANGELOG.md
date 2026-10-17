@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.1](https://github.com/abinnovision/tallyrelease/compare/cli-v0.4.0...cli-v0.4.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **cli:** title shared release PRs after the branch ([#67](https://github.com/abinnovision/tallyrelease/issues/67)) ([5ab65fd](https://github.com/abinnovision/tallyrelease/commit/5ab65fd9573afbe0d82282ca5653b08a20858a6e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @tallyrelease/core bumped to 0.4.1
+
 ## [0.4.0](https://github.com/abinnovision/tallyrelease/compare/cli-v0.3.2...cli-v0.4.0) (2026-10-17)
 
 
