@@ -249,7 +249,7 @@ describe("release", () => {
 		});
 
 		expect((await run("pr", merged)).stdout).toBe(
-			"created PR #2 tallyrelease/release/main/shared: chore(release): a@2.0.0, b@1.1.0\n",
+			"created PR #2 tallyrelease/release/main/shared: chore(release): main\n",
 		);
 		const files = remote.commits.get(remote.prs[1]?.headSha ?? "")?.files ?? {};
 		const changelog = files["packages/a/CHANGELOG.md"] ?? "";
@@ -313,7 +313,7 @@ describe("release", () => {
 		const branch = ["--branch", "release/1.x"];
 		const { remote, run, merge, release } = setup(dag, "release/1.x");
 		expect((await run("pr", dag, branch)).stdout).toBe(
-			"created PR #1 tallyrelease/release/release/1.x/shared: chore(release): a@1.0.1\n",
+			"created PR #1 tallyrelease/release/release/1.x/shared: chore(release): release/1.x\n",
 		);
 		const merged = merge(dag, 1);
 		remote.calls.length = 0;
@@ -376,7 +376,7 @@ branches:
 		});
 		const { remote, run, merge, release } = setup(dag);
 		expect((await run("pr", dag)).stdout).toBe(
-			"created PR #1 tallyrelease/release/main/shared: chore(release): groundwork@1.0.0\n",
+			"created PR #1 tallyrelease/release/main/shared: chore(release): main\n",
 		);
 		const files = remote.commits.get(remote.prs[0]?.headSha ?? "")?.files;
 		for (const id of ["api-server", "groundwork"]) {
@@ -527,7 +527,7 @@ branches:
 			});
 
 		expect((await cli(["pr"])).stdout).toBe(
-			"created PR #1 tallyrelease/release/main/shared: chore(release): a@1.1.0, b@1.1.0\n",
+			"created PR #1 tallyrelease/release/main/shared: chore(release): main\n",
 		);
 		const head = git(origin, "rev-parse", "tallyrelease/release/main/shared");
 		git(

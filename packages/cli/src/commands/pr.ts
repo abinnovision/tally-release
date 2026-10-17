@@ -20,9 +20,6 @@ import type { ReleaseItem } from "@tallyrelease/core";
 /** Body limit with headroom below GitHub's 65,536 characters. */
 const BODY_LIMIT = 60_000;
 
-/** GitHub's PR title limit. */
-const TITLE_LIMIT = 256;
-
 const TRUNCATED =
 	"_The changelog is truncated; the CHANGELOG.md files of this pull request hold all of it._";
 
@@ -174,8 +171,6 @@ export const releasePrs = async (
 
 		const desired = await Promise.all(
 			[...byLeaf].map(async ([leaf, items]) => {
-				const title = `chore(release): ${items.map((i) => `${i.name}@${i.version}`).join(", ")}`;
-
 				return {
 					leaf,
 					items,
@@ -194,9 +189,9 @@ export const releasePrs = async (
 						}),
 					),
 					title:
-						title.length <= TITLE_LIMIT
-							? title
-							: `chore(release): ${String(releaseEntries(items).length)} releases on ${plan.branch}`,
+						leaf === "shared"
+							? `chore(release): ${plan.branch}`
+							: `chore(release): ${items.map((i) => `${i.name}@${i.version}`).join(", ")}`,
 					...(await releaseFiles(workspace, plan, {
 						fs,
 						items,
