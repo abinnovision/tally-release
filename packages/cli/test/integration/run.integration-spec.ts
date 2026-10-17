@@ -415,6 +415,55 @@ describe("run --github-output", () => {
 			again.releases.map((r) => r.changes.map((c) => [c.sha, c.subject])),
 		).toEqual([[["c1", "add a"]], [["c2", "add b"]]]);
 	});
+
+	it("builds a tag-only unit released at HEAD despite an ignored changelog (E37)", async () => {
+		const start: Dag = {
+			commits: [
+				{
+					id: "c0",
+					files: {
+						"tallyrelease.yaml": `${config}ignore: ["**/*.md"]\nunits:\n  infra/tf: { id: tf }\n`,
+						"package.json": json({ workspaces: ["packages/*"] }),
+						"packages/a/package.json": json({ name: "@s/a", version: "1.0.0" }),
+						"infra/tf/main.tf": "0",
+					},
+				},
+				{
+					id: "c1",
+					message: "feat(a): add a",
+					files: { "packages/a/x.ts": "1" },
+				},
+				{
+					id: "c2",
+					message: "fix(tf): fix tf",
+					files: { "infra/tf/main.tf": "1" },
+				},
+			],
+			tags: [
+				{ name: "a-v1.0.0", commit: "c0" },
+				{ name: "tf-v1.0.0", commit: "c0" },
+			],
+		};
+		const harness = await setup(start);
+		harness.runs.push("c2");
+		const merged = harness.merge(start);
+
+		const { plan, releases } = await releasesOf(harness, merged, "c2");
+		expect(releases.find((r) => r.id === "tf")).toMatchObject({
+			kind: "release",
+			tag: "tf-v1.0.1",
+			catchUp: false,
+		});
+		const built = planSchema
+			.parse(
+				JSON.parse(readFileSync(plan?.slice("plan=".length) ?? "", "utf8")),
+			)
+			.units.filter((u) => u.affected !== null)
+			.map((u) => u.id);
+		for (const r of releases.filter((e) => !e.catchUp)) {
+			expect(built).toContain(r.id);
+		}
+	});
 });
 
 describe("run --github-output with several releases of a unit", () => {

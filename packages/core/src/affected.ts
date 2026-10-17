@@ -1,4 +1,5 @@
 import { attribution, matcher } from "./attribution.js";
+import { changelogPath } from "./changelog.js";
 import { uniqueSorted } from "./util.js";
 
 import type { Warning } from "./errors.js";
@@ -104,9 +105,15 @@ export const computeAffected = async (
 	const ignored = matcher(workspace.ignore);
 	const isGlobal = matcher(workspace.globalInputs);
 	const owners = attribution(units);
+	// A released unit owns its changelog regardless of ignore, include and exclude.
+	const changelogs = new Map(
+		units
+			.filter((u) => u.version !== "none")
+			.map((u) => [changelogPath(u), u.id]),
+	);
 
 	const files = (await git.diffFiles(opts.base, opts.head)).filter(
-		(f) => !ignored(f),
+		(f) => changelogs.has(f) || !ignored(f),
 	);
 	const hits = uniqueSorted(files.filter(isGlobal));
 	const direct = new Set<string>();
@@ -116,7 +123,8 @@ export const computeAffected = async (
 			continue;
 		}
 
-		const ids = owners(file);
+		const own = changelogs.get(file);
+		const ids = own === undefined ? owners(file) : [own];
 		if (ids.length === 0) {
 			unattributed.push(file);
 		}

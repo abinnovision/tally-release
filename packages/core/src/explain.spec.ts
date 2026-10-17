@@ -48,6 +48,36 @@ describe("explainUnit", () => {
 		expect((await explain("lib")).files).toEqual(["lib/x"]);
 	});
 
+	it("lists the changelog of a released unit despite ignore", async () => {
+		const repo = memoryGit({
+			commits: [
+				{ id: "c0", files: { "app/x": "0" } },
+				{ id: "c1", files: { "app/CHANGELOG.md": "1", "app/README.md": "1" } },
+			],
+		});
+		const fs = memoryFs(repo.tree("c1"));
+		const workspace = await loadWorkspace({
+			config: {
+				plugins: {},
+				ignore: ["**/*.md"],
+				units: { app: { release: true } },
+			},
+			plugins: [],
+			fs,
+			repo: { name: "demo" },
+		});
+		const result = await explainUnit(workspace, repo, {
+			tool: "test",
+			branch: "main",
+			head: "c1",
+			base: "c0",
+			baseSource: "cli",
+			fs,
+			unit: "app",
+		});
+		expect(result.files).toEqual(["app/CHANGELOG.md"]);
+	});
+
 	it("names the unit's group", async () => {
 		expect((await explain("app")).group).toBeNull();
 		expect((await explain("app", { web: { units: ["app"] } })).group).toEqual({

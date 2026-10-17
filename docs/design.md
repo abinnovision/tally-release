@@ -296,7 +296,7 @@ A `units` key containing `*` is a glob over unit roots. `*` matches exactly one 
 ```
 if base == null:   all units affected, reason "all"; stop (no diff)
 files     = git.diffFiles(base, head)             // tree-to-tree
-files'    = files − ignore
+files'    = files − ignore          // except changelogs of released units
 hits      = files' ∩ globalInputs
 if hits ≠ ∅:       all units affected, reason "global", build.globalInputs = hits
 direct    = owners(files' − hits)                 // reason "direct"
@@ -308,7 +308,9 @@ unattributed = files' − hits − attributed
 
 Group coupling (v0.2): if any member of a fixed group is affected, all members are, so every unit that gets a version is built; a coupled member's dependents are affected too. Reasons are assigned after the closure with precedence `direct` > `dependent` > `group`. `affected --tag` filters after coupling, so a mate without the tag is dropped from the filtered output. Repos without `groups` are unchanged. Structural group errors (`E_GROUP_UNKNOWN_UNIT`, `E_GROUP_OVERLAP`) fail `affected`; release-only group errors do not.
 
-Tree-to-tree diff needs no special casing for merges, reverts or squash merges. Unreleased units (`version: none`) are included; build selection does not depend on release status. Output sorted by unit id.
+A released unit owns `<root>/CHANGELOG.md` (`changelogPath`; `CHANGELOG.md` for a root unit) regardless of `ignore`, `include` and `exclude`, with reason `direct`; global inputs are still checked first. So a release commit always keeps its units in the build set, tag-only units under `ignore: ["**/*.md"]` included. `explain` lists that changelog among the unit's files.
+
+Tree-to-tree diff needs no special casing for merges, reverts or squash merges. Unreleased units (`version: none`) are included; build selection depends on release status only through changelog ownership. Output sorted by unit id.
 
 **A.7.5 Build base resolution (cli, in order).**
 
@@ -383,7 +385,7 @@ Channels: literal `[0-9A-Za-z-]+` with at least one letter or dash outside token
 
 Group members share `next`, `version` and `N` (A.7.8). Unreleased units never have a pending bump: they are kind `rebuild` when affected and never listed as kind `none` under `--all`. Units outside the build set without a pending release are not listed. `next` is set for every pending unit, whatever its kind.
 
-Stable releases are not units of the HEAD computation. `plan.released` is derived from durable facts only: every stable unit tag whose commit lies on HEAD's first-parent chain in `(build.base, HEAD]`; a maintenance tag reached only through a merge-back is not listed. When `base` is `null` only tags at HEAD are listed, with `W_RELEASED_NO_BASE` when earlier releases on the chain are left out, so a run without a base never re-emits history. Core fills it with `withReleased(workspace, plan, { git })`; `computePlan` leaves `released` empty, so `pr`, `version`, `shadow` and `explain` neither read the extra tags nor warn; `plan` and `run` fill it. `run` fails with `E_BASE_REQUIRED` before any effect when the base is `null` because the forge failed (`W_FORGE_ERROR`) instead of emitting less (`run` needs a token, so `W_NO_FORGE` cannot cause it). `releasedFromTags(workspace, plan, { git, tags })` builds entries for named tags; the caller passes the union by tag of the `plan.released` tags and the tags a reconcile created in the same run (same-sha no-op tags included). Group members are listed per unit. Order: oldest release commit on the first-parent chain first, then plan unit order (topological), then tag name; `catchUp` is `releaseSha != head`, `line` the matched rule's kind, `pr` null. The cli fills `pr` from the reconcile of the same run, else with the PR that merged `releaseSha` (`prForCommit`), else null (no token; in `plan` also on a forge error, which warns `W_FORGE_ERROR`). Because the build base falls back to `lastSuccess` after a failed run (A.7.5), releases whose publish failed are emitted again by the next run; publishers treat "already published" as success.
+Stable releases are not units of the HEAD computation. `plan.released` is derived from durable facts only: every stable unit tag whose commit lies on HEAD's first-parent chain in `(build.base, HEAD]`; a maintenance tag reached only through a merge-back is not listed. When `base` is `null` only tags at HEAD are listed, with `W_RELEASED_NO_BASE` when earlier releases on the chain are left out, so a run without a base never re-emits history. Core fills it with `withReleased(workspace, plan, { git })`; `computePlan` leaves `released` empty, so `pr`, `version`, `shadow` and `explain` neither read the extra tags nor warn; `plan` and `run` fill it. `run` fails with `E_BASE_REQUIRED` before any effect when the base is `null` because the forge failed (`W_FORGE_ERROR`) instead of emitting less (`run` needs a token, so `W_NO_FORGE` cannot cause it). `releasedFromTags(workspace, plan, { git, tags })` builds entries for named tags; the caller passes the union by tag of the `plan.released` tags and the tags a reconcile created in the same run (same-sha no-op tags included). Group members are listed per unit. Order: oldest release commit on the first-parent chain first, then plan unit order (topological), then tag name; `line` is the matched rule's kind. `catchUp` is `releaseSha != head` or the unit is not in the build set (`affected` null); a release at HEAD of a unit outside the build set warns `W_RELEASE_NOT_BUILT` (with `unit`) and is listed as a catch-up. Core sets `pr: null`. The cli fills `pr` from the reconcile of the same run, else with the PR that merged `releaseSha` (`prForCommit`), else null (no token; in `plan` also on a forge error, which warns `W_FORGE_ERROR`). Because the build base falls back to `lastSuccess` after a failed run (A.7.5), releases whose publish failed are emitted again by the next run; publishers treat "already published" as success.
 
 `N` monotonicity: along a line's first-parent chain, `sinceLineBase` grows by at least 1 per commit, and the line base only moves when a stable tag of the unit lands on that chain, which also raises `next`, including a tag created from the line itself (that release becomes the new `from`). Merging a maintenance branch back moves the base tag (e.g. 1.4.2 to 1.4.3) but not the line base, so `N` never drops while `next` stays 2.0.0. Without a line base `N` counts from the unit's introduction, which is fixed history; the first stable tag on the chain moves the origin to that line base and raises `next`. The sha (`plan.head`) is the deployable identity of `rebuild` units and is never part of the version string.
 
@@ -493,7 +495,7 @@ interface ReleasedUnit {
   tag: string;
   floatingTags: string[];
   releaseSha: string; // commit the tag points to (PR merge_commit_sha)
-  catchUp: boolean; // releaseSha != head (skipped merge run or failed publish)
+  catchUp: boolean; // not built from HEAD by this run (release sha differs from HEAD, or the unit is outside the build set)
   pr: number | null; // from the forge when available
   line: "default" | "maintenance";
 }
@@ -501,7 +503,7 @@ interface ReleasedUnit {
 
 A group member's `bump`, `next` and `version` are the group's and its changes are read from the group range (A.7.8), while its `from` and `baseTag` are its own; `groups[]` carries the group's base tag and `from`. `explain` prints the source of a member's `next` when it is not the group bump (for example `group sdk, release-as`).
 
-`explain` and the changelog list absorbed Changes under the released unit with `via <unit>`. Build selection in `AffectedDoc` does not depend on release status; `released` only reports it.
+`explain` and the changelog list absorbed Changes under the released unit with `via <unit>`. Build selection in `AffectedDoc` depends on release status only through changelog ownership (A.7.4); `released` otherwise only reports it.
 
 The cli publishes `plan.schema.json` and `affected.schema.json` (generated from zod) in the npm package (exports `@tallyrelease/cli/plan.schema.json` and `@tallyrelease/cli/affected.schema.json`). The schemas are strict (`additionalProperties: false`). Within schema 1, new optional fields and new enum values are allowed; consumers validate with the schema of the tool release they run. Removing or renaming fields bumps `schema`. Fields filled by later milestones are emitted with their empty values (`group: null`, `groups: []`, `released: []`).
 
@@ -675,6 +677,8 @@ Shadow (v0.2) is not part of the action: each repo runs a standalone push-only w
 
 **Release list** (v0.3). `releases` is the generic list `run --github-output` writes (not versioned; additive fields only): `[{ id, path, kind: "release" | "prerelease", version, channel, tag, tagPrefix, sha, releaseSha, catchUp, pr, line, changes }]`. `channel` is null for releases. `changes` has the shape of the plan's `units[].changes`: for a release the unit's changes in the plan at the first parent of `releaseSha` (reused from the reconcile of the same run), `[]` without a parent or unit; for a prerelease the unit's changes in the HEAD plan. `tagPrefix` is the literal part of the unit's tag format before `{version}` (with `{id}` rendered), null for prereleases and for formats with text after `{version}` (the git rule below supports plain prefixes only). `releaseSha` is always the full sha. Releases come first (`plan.released` order: oldest release commit first, then plan unit order), then prereleases in plan unit order, none for a unit released at HEAD; a prerelease has `tag: null`, `releaseSha = sha = plan.head`, `catchUp: false`. Every stable tag in range is emitted, also several of one unit, so no tagged version stays unpublished; the git rule decides `latest` and dispatch, not the list.
 
+Every `catchUp: false` entry belongs to a unit in the build set of the same run, so `release-build` only needs `catchUp: true` entries, which may be at HEAD when the unit was outside the build set.
+
 **app-stack** (`tallyrelease: off | shadow | release`, default `off`; `off` and `shadow` output stays byte-identical):
 
 | Mode      | Behaviour                                                                                                                                                                                                                             |
@@ -791,7 +795,7 @@ Cli integration: `E01-version-files-written`, `E02-release-pr-create-then-update
 
 0.3.1 (prerelease numbers from the unit's introduction): core scenarios `R79-prerelease-n-from-introduction`, `R79b-prerelease-n-introduced-by-merge`, `R79c-prerelease-n-root-unit-total`, `R79d-fixed-group-prerelease-n-oldest-introduction`, `R79e-prerelease-n-merged-tag-off-chain`; `gitReaderConformance` covers `introduced`; cli integration `G39-explain-introduction`.
 
-0.4 (release list for publishers): core scenarios `C33-glob-overlay-basic`, `C33b-glob-overlay-order`, `C33c-glob-overlay-field-rejected`, `C33d-glob-overlay-double-star` and `C33e-glob-overlay-unmatched`.
+0.4 (release list for publishers): core scenarios `C33-glob-overlay-basic`, `C33b-glob-overlay-order`, `C33c-glob-overlay-field-rejected`, `C33d-glob-overlay-double-star`, `C33e-glob-overlay-unmatched`, `A16-released-changelog-not-ignored`, `R80-release-at-head-in-build-set` and `R80b-release-at-head-outside-build-set`; cli integration `E37` (a tag-only unit released at HEAD under `ignore: ["**/*.md"]` is `catchUp: false` and in the build set).
 
 **Rollout order**
 

@@ -114,6 +114,7 @@ export const releaseEntrySchema = z.strictObject({
 	tagPrefix: z.string().nullable(),
 	sha: z.string(),
 	releaseSha: z.string(),
+	/** Not built from HEAD by this run (release sha differs from HEAD, or the unit is outside the build set). */
 	catchUp: z.boolean(),
 	pr: z.number().nullable(),
 	line: z.enum(["default", "maintenance"]),

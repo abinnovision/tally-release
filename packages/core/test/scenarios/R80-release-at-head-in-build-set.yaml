@@ -1,0 +1,36 @@
+description: >-
+  A release commit that changes only an ignored changelog keeps the unit in
+  the build set, so its release at HEAD is not a catch-up.
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+config:
+  plugins: { stub: {} }
+  defaults: { release: true }
+  ignore: ["**/*.md"]
+  branches:
+    - { name: main, line: default }
+git:
+  commits:
+    - id: c0
+      files: { packages/a/index.ts: "0" }
+    - id: c1
+      message: "feat: a"
+      files: { packages/a/index.ts: "1" }
+    - id: c2
+      message: "chore(release): a@1.1.0"
+      files: { packages/a/CHANGELOG.md: "1.1.0" }
+  tags:
+    - { name: a-v1.0.0, commit: c0 }
+    - { name: a-v1.1.0, commit: c2 }
+base: c1
+plan: { released: true }
+expect:
+  affected:
+    units:
+      - { id: a, reason: direct }
+  plan:
+    released:
+      - { id: a, tag: a-v1.1.0, releaseSha: c2, catchUp: false }
+    warnings: []
