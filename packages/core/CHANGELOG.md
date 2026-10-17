@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/abinnovision/tallyrelease/compare/core-v0.3.2...core-v0.4.0) (2026-10-17)
+
+
+### Features
+
+* add a forge object to released entries ([#60](https://github.com/abinnovision/tallyrelease/issues/60)) ([7647a2d](https://github.com/abinnovision/tallyrelease/commit/7647a2d2d018a4fc2a8d09417491f80866f8b8ea))
+* **cli:** suggest a maintenance branch in major release PRs ([#55](https://github.com/abinnovision/tallyrelease/issues/55)) ([bc13891](https://github.com/abinnovision/tallyrelease/commit/bc138913fd6db49c25ff0871d0506a62fc0521ac))
+* **core:** accept glob keys in unit overlays ([#61](https://github.com/abinnovision/tallyrelease/issues/61)) ([32c19b4](https://github.com/abinnovision/tallyrelease/commit/32c19b4258d9b6eed098bb9709fd9879542b9c3a))
+* **core:** keep releases at HEAD in the build set ([#62](https://github.com/abinnovision/tallyrelease/issues/62)) ([2e4c1ea](https://github.com/abinnovision/tallyrelease/commit/2e4c1ea81b3885c75a057a22765aae26c07ba302))
+* list propagated changes on release entries and drop deprecated fields ([#66](https://github.com/abinnovision/tallyrelease/issues/66)) ([df5ead8](https://github.com/abinnovision/tallyrelease/commit/df5ead84d5be8def8601d037f80d8b65edca443c))
+* mark the latest release of each unit ([#63](https://github.com/abinnovision/tallyrelease/issues/63)) ([3b7a7cb](https://github.com/abinnovision/tallyrelease/commit/3b7a7cb4b0f51568d909acad0e6c209b79575713))
+
 ## [0.3.2](https://github.com/abinnovision/tallyrelease/compare/core-v0.3.1...core-v0.3.2) (2026-10-16)
 
 
