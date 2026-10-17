@@ -3,7 +3,11 @@ import type { BumpLevel, Propagate, VersionSource } from "./plugin.js";
 /** Release PR of a release item: the shared PR or its own. */
 export type ReleasePrMode = "shared" | "separate";
 
-/** Config overlay for the unit at a root; creates a config-only unit if none is discovered. */
+/**
+ * Config overlay for the unit at a root; creates a config-only unit if none is
+ * discovered. A glob key (`*` matches one segment, not dot directories) never
+ * creates units and cannot set `id`, `include`, `exclude` or `versionFiles`.
+ */
 export interface UnitOverlay {
 	id?: string;
 	include?: string[];
@@ -88,7 +92,7 @@ export interface TallyConfig {
 		/** Default `shared`. */
 		releasePr?: ReleasePrMode;
 	};
-	/** Overlays keyed by unit root. */
+	/** Overlays keyed by unit root or glob; exact keys win over globs per field. */
 	units?: Record<string, UnitOverlay>;
 	deps?: DepConfig[];
 	ignore?: string[];

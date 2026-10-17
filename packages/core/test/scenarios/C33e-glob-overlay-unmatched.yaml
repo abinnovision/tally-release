@@ -1,0 +1,21 @@
+description: A glob overlay that matches no unit warns and creates no unit.
+config:
+  plugins: { stub: {} }
+  units:
+    "apps/*": { release: true }
+plugins:
+  - name: stub
+    units:
+      - { id: ui, root: packages/ui }
+git:
+  commits:
+    - id: c0
+      files: { packages/ui/a.ts: "1" }
+base: null
+expect:
+  units:
+    - { id: ui, version: none }
+  affected:
+    warnings:
+      - code: W_UNIT_GLOB_UNMATCHED
+        message: unit overlay "apps/*" matches no unit

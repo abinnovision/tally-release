@@ -142,7 +142,7 @@ export const loadWorkspace = async (
 ): Promise<Workspace> => {
 	const warnings: Warning[] = [];
 	const active = await activatePlugins(input, warnings);
-	const units = await discoverUnits(active, input);
+	const units = await discoverUnits(active, input, warnings);
 	const graph = buildGraph(
 		units,
 		await collectEdges(active, input.config, units),

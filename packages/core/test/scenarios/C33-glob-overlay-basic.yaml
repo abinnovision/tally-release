@@ -1,0 +1,39 @@
+description: >-
+  A glob key overlays every unit one segment below, skipping dot directories
+  and deeper roots; an exact key wins per field and its tags replace the glob's.
+config:
+  plugins: { stub: {} }
+  units:
+    "apps/*": { release: true, tags: [docker] }
+    apps/web: { tags: [npm] }
+    infra/tf: { id: tf }
+    "infra/*": { release: true }
+plugins:
+  - name: stub
+    units:
+      - { id: web, root: apps/web }
+      - { id: api, root: apps/api }
+      - { id: hidden, root: apps/.hidden }
+      - { id: sub, root: apps/web/sub }
+      - { id: ui, root: packages/ui }
+git:
+  commits:
+    - id: c0
+      files:
+        apps/web/a.ts: "1"
+        apps/api/a.ts: "1"
+        apps/.hidden/a.ts: "1"
+        apps/web/sub/a.ts: "1"
+        packages/ui/a.ts: "1"
+        infra/tf/main.tf: "1"
+base: null
+expect:
+  units:
+    - { id: api, version: tag, tags: [docker] }
+    - { id: hidden, version: none, tags: [] }
+    - { id: sub, version: none, tags: [] }
+    - { id: tf, plugin: config, version: tag, tags: [] }
+    - { id: ui, version: none, tags: [] }
+    - { id: web, version: tag, tags: [npm] }
+  affected:
+    warnings: []

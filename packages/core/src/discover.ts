@@ -3,6 +3,8 @@ import { defaultUnitId } from "./plugin.js";
 import { runHook } from "./plugins.js";
 import { compare, uniqueSorted } from "./util.js";
 
+import type { UnitOverlay } from "./config.js";
+import type { Warning } from "./errors.js";
 import type { Unit, UnitDraft } from "./plugin.js";
 import type { ActivePlugin, PluginEnv } from "./plugins.js";
 
@@ -28,6 +30,69 @@ const escapeGlob = (path: string): string =>
 const isInside = (path: string, root: string): boolean =>
 	path !== root && (root === "." || path.startsWith(`${root}/`));
 
+/** Fields a glob overlay cannot set. */
+const GLOB_REJECTED = ["id", "include", "exclude", "versionFiles"] as const;
+
+/**
+ * Validates a glob key and returns its segments: each is `*` (any segment not
+ * starting with `.`) or a literal.
+ */
+const globSegments = (
+	key: string,
+	root: string,
+	overlay: UnitOverlay,
+): string[] => {
+	const segments = root.split("/");
+	if (segments.some((s) => s !== "*" && s.includes("*"))) {
+		throw new TallyError(
+			"E_UNIT_GLOB",
+			`unit overlay "${key}" may use "*" only as a whole path segment`,
+			{ key },
+		);
+	}
+
+	const field = GLOB_REJECTED.find((f) => overlay[f] !== undefined);
+	if (field !== undefined) {
+		throw new TallyError(
+			"E_UNIT_GLOB",
+			`unit overlay "${key}" cannot set "${field}" on a glob key`,
+			{ key, field },
+		);
+	}
+
+	return segments;
+};
+
+const globMatches = (segments: readonly string[], root: string): boolean => {
+	const parts = root.split("/");
+
+	return (
+		parts.length === segments.length &&
+		parts.every((p, i) =>
+			segments[i] === "*" ? !p.startsWith(".") : segments[i] === p,
+		)
+	);
+};
+
+/** Merges draft fields; sets `release`, `tags` and `initialVersion` when defined. */
+const applyOverlay = (
+	entry: Entry,
+	{ release, tags, initialVersion, ...overlay }: UnitOverlay,
+): void => {
+	entry.draft = { ...entry.draft, ...overlay };
+	if (release !== undefined) {
+		entry.release = release;
+	}
+
+	if (tags !== undefined) {
+		entry.tags = tags;
+	}
+
+	if (initialVersion !== undefined) {
+		entry.initialVersion = initialVersion;
+	}
+};
+
 /** Drops `.` and empty segments; rejects absolute roots and `..` segments. */
 export const normalizeRoot = (root: string): string => {
 	const segments = root.split("/");
@@ -43,12 +108,13 @@ export const normalizeRoot = (root: string): string => {
 };
 
 /**
- * Runs `discover` hooks in config order, applies config overlays and fills
- * defaults. Returns units sorted by id.
+ * Runs `discover` hooks in config order, applies config overlays (glob keys
+ * first, then exact keys) and fills defaults. Returns units sorted by id.
  */
 export const discoverUnits = async (
 	active: readonly ActivePlugin[],
 	env: Pick<PluginEnv, "config" | "fs" | "repo">,
+	warnings: Warning[] = [],
 ): Promise<Unit[]> => {
 	const byRoot = new Map<string, Entry>();
 
@@ -79,12 +145,11 @@ export const discoverUnits = async (
 		}
 	}
 
-	for (const [
-		key,
-		{ release, tags, initialVersion, ...overlay },
-	] of Object.entries(env.config.units ?? {})) {
+	const exact: [Entry, UnitOverlay][] = [];
+	const globs: [string, string[], UnitOverlay][] = [];
+	for (const [key, overlay] of Object.entries(env.config.units ?? {})) {
 		const root = normalizeRoot(key);
-		const invalid = tags?.find((t) => !UNIT_TAG.test(t));
+		const invalid = overlay.tags?.find((t) => !UNIT_TAG.test(t));
 		if (invalid !== undefined) {
 			throw new TallyError(
 				"E_UNIT_TAG",
@@ -93,26 +158,42 @@ export const discoverUnits = async (
 			);
 		}
 
-		const entry = byRoot.get(root);
-		if (entry) {
-			entry.draft = { ...entry.draft, ...overlay };
-			entry.release = release;
-			entry.tags = tags;
-			entry.initialVersion = initialVersion;
-		} else {
-			byRoot.set(root, {
+		if (root.includes("*")) {
+			globs.push([key, globSegments(key, root, overlay), overlay]);
+			continue;
+		}
+
+		let entry = byRoot.get(root);
+		if (!entry) {
+			entry = {
 				plugin: "config",
-				draft: {
-					...overlay,
-					id: overlay.id ?? defaultUnitId(root, env.repo.name),
-					root,
-				},
+				draft: { id: overlay.id ?? defaultUnitId(root, env.repo.name), root },
 				meta: {},
-				release,
-				tags,
-				initialVersion,
+			};
+			byRoot.set(root, entry);
+		}
+
+		exact.push([entry, overlay]);
+	}
+
+	for (const [key, segments, overlay] of globs) {
+		const matched = [...byRoot.entries()].filter(([root]) =>
+			globMatches(segments, root),
+		);
+		if (matched.length === 0) {
+			warnings.push({
+				code: "W_UNIT_GLOB_UNMATCHED",
+				message: `unit overlay "${key}" matches no unit`,
 			});
 		}
+
+		for (const [, entry] of matched) {
+			applyOverlay(entry, overlay);
+		}
+	}
+
+	for (const [entry, overlay] of exact) {
+		applyOverlay(entry, overlay);
 	}
 
 	const byId = new Map<string, Entry>();
