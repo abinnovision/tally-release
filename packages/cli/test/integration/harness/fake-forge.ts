@@ -113,6 +113,7 @@ export const fakeForge = (
 			const number = remote.prs.length + 1;
 			remote.prs.push({
 				number,
+				url: `pull/${String(number)}`,
 				head,
 				headSha: remote.branches.get(head) ?? "",
 				base,
@@ -158,7 +159,7 @@ export const fakeForge = (
 			const p = remote.prs.find((c) => c.mergeCommitSha === sha);
 
 			return await Promise.resolve(
-				p && { number: p.number, labels: [...p.labels] },
+				p && { number: p.number, url: p.url, labels: [...p.labels] },
 			);
 		},
 		releaseByTag: async (_repo, name) => {

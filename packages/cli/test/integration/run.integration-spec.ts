@@ -153,7 +153,7 @@ describe("run", () => {
 		const released = [
 			{ id: "a", tag: "a-v1.1.0", releaseSha: "merge-1", catchUp: false },
 			{ id: "b", tag: "b-v1.1.0", releaseSha: "merge-1", catchUp: false },
-		].map((r) => ({ ...r, pr: 1 }));
+		].map((r) => ({ ...r, pr: 1, forge: { pr: { number: 1 } } }));
 		expect(first.plan?.released).toMatchObject(released);
 		expect(first.plan?.units.map((u) => [u.id, u.baseTag])).toEqual([
 			["a", "a-v1.1.0"],
@@ -175,8 +175,20 @@ describe("run", () => {
 			"PR #1: tagged a-v1.1.0, b-v1.1.0 at merge-1",
 		);
 		expect(first.plan?.released).toMatchObject([
-			{ tag: "a-v1.1.0", releaseSha: "merge-1", catchUp: true, pr: 1 },
-			{ tag: "b-v1.1.0", releaseSha: "merge-1", catchUp: true, pr: 1 },
+			{
+				tag: "a-v1.1.0",
+				releaseSha: "merge-1",
+				catchUp: true,
+				pr: 1,
+				forge: { pr: { number: 1 } },
+			},
+			{
+				tag: "b-v1.1.0",
+				releaseSha: "merge-1",
+				catchUp: true,
+				pr: 1,
+				forge: { pr: { number: 1 } },
+			},
 		]);
 	});
 
@@ -190,8 +202,8 @@ describe("run", () => {
 		// The run at merge-1 failed to publish: the last success is still c2.
 		const failed = await run(later, [], { event: push("merge-1") });
 		expect(failed.plan?.released).toMatchObject([
-			{ tag: "a-v1.1.0", catchUp: true, pr: 1 },
-			{ tag: "b-v1.1.0", catchUp: true, pr: 1 },
+			{ tag: "a-v1.1.0", catchUp: true, pr: 1, forge: { pr: { number: 1 } } },
+			{ tag: "b-v1.1.0", catchUp: true, pr: 1, forge: { pr: { number: 1 } } },
 		]);
 
 		runs.unshift("merge-1");
@@ -230,8 +242,8 @@ describe("run", () => {
 		const [first, second] = await twice(later, [], { event: dispatch });
 		expect(first.stderr).toContain("warning[W_NO_LAST_SUCCESS]");
 		expect(first.plan?.released).toMatchObject([
-			{ tag: "a-v1.1.0", catchUp: true, pr: 1 },
-			{ tag: "b-v1.1.0", catchUp: true, pr: 1 },
+			{ tag: "a-v1.1.0", catchUp: true, pr: 1, forge: { pr: { number: 1 } } },
+			{ tag: "b-v1.1.0", catchUp: true, pr: 1, forge: { pr: { number: 1 } } },
 		]);
 		expect(first.plan?.warnings.map((w) => w.code)).toContain(
 			"W_RELEASED_NO_BASE",
@@ -252,8 +264,8 @@ describe("run", () => {
 			/^PR #1: would tag a-v1\.1\.0, b-v1\.1\.0 at merge-1\nPR #1: would create releases a-v1\.1\.0, b-v1\.1\.0\nPR #1: would label released\nno release PRs\n/u,
 		);
 		expect(first.plan?.released).toMatchObject([
-			{ tag: "a-v1.1.0", pr: 1 },
-			{ tag: "b-v1.1.0", pr: 1 },
+			{ tag: "a-v1.1.0", pr: 1, forge: { pr: { number: 1 }, release: null } },
+			{ tag: "b-v1.1.0", pr: 1, forge: { pr: { number: 1 }, release: null } },
 		]);
 		expect(second).toEqual(first);
 		expect(remote.calls).toEqual([]);
@@ -381,6 +393,10 @@ describe("run --github-output", () => {
 				sha: "merge-1",
 				catchUp: true,
 				pr: 1,
+				forge: {
+					pr: { number: 1, url: "pull/1" },
+					release: { url: "release/a-v1.1.0" },
+				},
 			},
 			{ id: "b", kind: "release", tag: "b-v1.1.0", catchUp: true },
 			{
@@ -410,6 +426,11 @@ describe("run --github-output", () => {
 			["a-v1.1.0", true],
 			["b-v1.1.0", true],
 		]);
+		// Looked up on the forge: the PR of merge-1 and the release created earlier.
+		expect(again.releases[0]?.forge).toEqual({
+			pr: { number: 1, url: "pull/1" },
+			release: { url: "release/a-v1.1.0" },
+		});
 		// Not reconciled in this run: planned at the parent of merge-1.
 		expect(
 			again.releases.map((r) => r.changes.map((c) => [c.sha, c.subject])),
@@ -502,7 +523,7 @@ describe("run --github-output with several releases of a unit", () => {
 });
 
 describe("plan", () => {
-	it("fills released with the PR of the release commit, null without a token (E26)", async () => {
+	it("fills released with the PR and release of the tag, forge null without a token (E26)", async () => {
 		const { runs, merge, run, cli } = await setup();
 		runs.push("c2");
 		const merged = merge(dag);
@@ -518,12 +539,19 @@ describe("plan", () => {
 		};
 
 		expect(await plan({})).toMatchObject([
-			{ tag: "a-v1.1.0", pr: 1 },
-			{ tag: "b-v1.1.0", pr: 1 },
+			{
+				tag: "a-v1.1.0",
+				pr: 1,
+				forge: {
+					pr: { number: 1, url: "pull/1" },
+					release: { url: "release/a-v1.1.0" },
+				},
+			},
+			{ tag: "b-v1.1.0", pr: 1, forge: { pr: { number: 1 } } },
 		]);
 		expect(await plan({ env: { GITHUB_TOKEN: undefined } })).toMatchObject([
-			{ tag: "a-v1.1.0", pr: null },
-			{ tag: "b-v1.1.0", pr: null },
+			{ tag: "a-v1.1.0", pr: null, forge: null },
+			{ tag: "b-v1.1.0", pr: null, forge: null },
 		]);
 	});
 });

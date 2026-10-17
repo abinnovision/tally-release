@@ -45,6 +45,7 @@ expect:
         releaseSha: c3
         catchUp: false
         pr: null
+        forge: null
         line: default
         latest: true
     warnings: []

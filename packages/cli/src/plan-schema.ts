@@ -26,6 +26,16 @@ const changeSchema = z.strictObject({
 	releaseAs: z.string().exactOptional(),
 });
 
+/** Null when not looked up (no forge, or a forge error in `plan`). */
+const forgeSchema = z
+	.strictObject({
+		/** PR that merged the release sha. */
+		pr: z.strictObject({ number: z.number(), url: z.string() }).nullable(),
+		/** Forge release of the tag. */
+		release: z.strictObject({ url: z.string() }).nullable(),
+	})
+	.nullable();
+
 /** Schema of `tallyrelease plan --json`, published as `plan.schema.json`. */
 export const planSchema = z.strictObject({
 	...affectedDocSchema.omit({ units: true }).shape,
@@ -93,7 +103,9 @@ export const planSchema = z.strictObject({
 			floatingTags: z.array(z.string()),
 			releaseSha: z.string(),
 			catchUp: z.boolean(),
+			/** Deprecated, `forge.pr.number`; removed with `tagPrefix` in a later 0.x. */
 			pr: z.number().nullable(),
+			forge: forgeSchema,
 			line: z.enum(["default", "maintenance"]),
 			latest: z.boolean(),
 		}),
@@ -117,7 +129,10 @@ export const releaseEntrySchema = z.strictObject({
 	releaseSha: z.string(),
 	/** Not built from HEAD by this run (release sha differs from HEAD, or the unit is outside the build set). */
 	catchUp: z.boolean(),
+	/** Deprecated, `forge.pr.number`; removed with `tagPrefix` in a later 0.x. */
 	pr: z.number().nullable(),
+	/** Null for prereleases. */
+	forge: forgeSchema,
 	line: z.enum(["default", "maintenance"]),
 	/** Highest stable version tagged for the unit, never on a maintenance line; false for prereleases. */
 	latest: z.boolean(),

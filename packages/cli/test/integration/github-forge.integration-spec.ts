@@ -111,6 +111,7 @@ describe("github forge", () => {
 			fullName = "acme/repo",
 		) => ({
 			number,
+			html_url: `https://github.test/acme/repo/pull/${String(number)}`,
 			head: {
 				ref: `tallyrelease/release/${base}/shared`,
 				sha: `h${String(number)}`,
@@ -166,6 +167,7 @@ describe("github forge", () => {
 			expect(open.map((p) => p.number)).toEqual([1, 4, 5, 6]);
 			expect(open[0]).toEqual({
 				number: 1,
+				url: "https://github.test/acme/repo/pull/1",
 				head: "tallyrelease/release/main/shared",
 				headSha: "h1",
 				base: "main",
@@ -333,6 +335,7 @@ describe("github forge", () => {
 						{ number: 8, merge_commit_sha: "x", merged_at: null, labels: [] },
 						{
 							number: 9,
+							html_url: "https://github.test/acme/repo/pull/9",
 							merge_commit_sha: "m9",
 							merged_at: "2026-01-01T00:00:00Z",
 							labels: [{ name: "tallyrelease: released" }],
@@ -353,6 +356,7 @@ describe("github forge", () => {
 			expect(await f.branchSha(repo, "gone")).toBeUndefined();
 			expect(await f.prForCommit(repo, "m9")).toEqual({
 				number: 9,
+				url: "https://github.test/acme/repo/pull/9",
 				labels: ["tallyrelease: released"],
 			});
 			expect(await f.prForCommit(repo, "bad")).toBeUndefined();

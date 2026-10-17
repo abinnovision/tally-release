@@ -18,6 +18,8 @@ export const LABELS = {
 
 export interface ReleasePr {
 	number: number;
+	/** Web URL. */
+	url: string;
 	/** Head branch name. */
 	head: string;
 	headSha: string;
@@ -81,7 +83,7 @@ export interface Forge {
 	prForCommit: (
 		repo: RepoRef,
 		sha: string,
-	) => Promise<{ number: number; labels: string[] } | undefined>;
+	) => Promise<{ number: number; url: string; labels: string[] } | undefined>;
 	/** Undefined when no release exists for the tag. */
 	releaseByTag: (
 		repo: RepoRef,

@@ -555,10 +555,20 @@ export interface ReleasedUnit {
 	releaseSha: string;
 	/** Not built from HEAD by this run (release sha differs from HEAD, or the unit is outside the build set). */
 	catchUp: boolean;
+	/** Deprecated, `forge.pr.number`; removed with `tagPrefix` in a later 0.x. */
 	pr: number | null;
+	/** Null when not looked up (no forge, or a forge error in `plan`). */
+	forge: ReleasedForge | null;
 	line: "default" | "maintenance";
 	/** Highest stable version tagged for the unit, never on a maintenance line. */
 	latest: boolean;
+}
+
+export interface ReleasedForge {
+	/** PR that merged the release sha. */
+	pr: { number: number; url: string } | null;
+	/** Forge release of the tag. */
+	release: { url: string } | null;
 }
 
 /** `tallyrelease plan --json`, schema 1. */

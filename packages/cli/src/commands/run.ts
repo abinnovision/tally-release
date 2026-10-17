@@ -6,7 +6,7 @@ import {
 } from "@tallyrelease/core";
 
 import { effectSkipped } from "./effects.js";
-import { planOptions, releasedPrs, writePlan } from "./plan.js";
+import { planOptions, releasedForge, writePlan } from "./plan.js";
 import { releasePrs } from "./pr.js";
 import { planAtParent, reconcile, withTags } from "./release.js";
 import { releaseEntries } from "../ci/releases.js";
@@ -104,12 +104,17 @@ export const run = async (session: Session, flags: RunFlags): Promise<void> => {
 			workspace,
 		};
 	});
-	const known = new Map(
-		reconciled.flatMap((r) => r.tags.map((t) => [t, r.number])),
-	);
+	const known = {
+		prs: new Map(
+			reconciled.flatMap(({ number, url, tags }) =>
+				tags.map((t) => [t, { number, url }]),
+			),
+		),
+		releases: new Map(reconciled.flatMap((r) => [...r.releases])),
+	};
 	const doc = {
 		...planned.plan,
-		released: await releasedPrs(runSession, planned.plan.released, known),
+		released: await releasedForge(runSession, planned.plan.released, known),
 		warnings: [...planned.plan.warnings, ...setup.warnings],
 	};
 	warn(doc.warnings);
