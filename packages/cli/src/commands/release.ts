@@ -92,7 +92,7 @@ const createReleases = async (
  * Workspace and plan at the first parent of `mergeSha`; `plan` is undefined
  * when `releases` are given and do not equal it.
  */
-const planAtParent = async (
+export const planAtParent = async (
 	session: Session,
 	{
 		git,
@@ -171,6 +171,8 @@ export interface Reconciled {
 	tags: string[];
 	/** Merge commit the tags point at. */
 	sha: string;
+	/** Plan units at the first parent of `sha`. */
+	units: Plan["units"];
 }
 
 /**
@@ -366,7 +368,12 @@ export const reconcile = async (
 		}
 
 		lines.push(`${label}: ${labelled} released`);
-		reconciled.push({ number: pr.number, tags, sha: mergeSha });
+		reconciled.push({
+			number: pr.number,
+			tags,
+			sha: mergeSha,
+			units: plan.units,
+		});
 	}
 	/* eslint-enable no-await-in-loop */
 

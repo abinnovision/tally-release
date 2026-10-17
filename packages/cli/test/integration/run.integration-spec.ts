@@ -392,6 +392,10 @@ describe("run --github-output", () => {
 			},
 		]);
 		expect(releases[2]?.releaseSha).toBe(tip(later));
+		// The released commits, then the change pending since a-v1.1.0.
+		expect(
+			releases.map((r) => r.changes.map((c) => [c.sha, c.subject])),
+		).toEqual([[["c1", "add a"]], [["c2", "add b"]], [["c5", "more a"]]]);
 	});
 
 	it("emits every release again until a run succeeds (E24, E25)", async () => {
@@ -406,6 +410,10 @@ describe("run --github-output", () => {
 			["a-v1.1.0", true],
 			["b-v1.1.0", true],
 		]);
+		// Not reconciled in this run: planned at the parent of merge-1.
+		expect(
+			again.releases.map((r) => r.changes.map((c) => [c.sha, c.subject])),
+		).toEqual([[["c1", "add a"]], [["c2", "add b"]]]);
 	});
 });
 

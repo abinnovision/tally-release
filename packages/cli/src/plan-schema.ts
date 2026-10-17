@@ -14,6 +14,18 @@ type Equals<A, B> =
 
 const bump = z.enum(["major", "minor", "patch"]);
 
+const changeSchema = z.strictObject({
+	sha: z.string().exactOptional(),
+	type: z.string(),
+	breaking: z.boolean(),
+	scope: z.string().exactOptional(),
+	subject: z.string(),
+	notes: z.string().exactOptional(),
+	pr: z.number().exactOptional(),
+	via: z.string().exactOptional(),
+	releaseAs: z.string().exactOptional(),
+});
+
 /** Schema of `tallyrelease plan --json`, published as `plan.schema.json`. */
 export const planSchema = z.strictObject({
 	...affectedDocSchema.omit({ units: true }).shape,
@@ -58,19 +70,7 @@ export const planSchema = z.strictObject({
 			next: z.string().nullable(),
 			version: z.string().nullable(),
 			sha: z.string(),
-			changes: z.array(
-				z.strictObject({
-					sha: z.string().exactOptional(),
-					type: z.string(),
-					breaking: z.boolean(),
-					scope: z.string().exactOptional(),
-					subject: z.string(),
-					notes: z.string().exactOptional(),
-					pr: z.number().exactOptional(),
-					via: z.string().exactOptional(),
-					releaseAs: z.string().exactOptional(),
-				}),
-			),
+			changes: z.array(changeSchema),
 		}),
 	),
 	groups: z.array(
@@ -117,6 +117,8 @@ export const releaseEntrySchema = z.strictObject({
 	catchUp: z.boolean(),
 	pr: z.number().nullable(),
 	line: z.enum(["default", "maintenance"]),
+	/** Changes of the release; of a prerelease, those since the last stable release. */
+	changes: z.array(changeSchema),
 });
 
 export type ReleaseEntry = z.infer<typeof releaseEntrySchema>;
