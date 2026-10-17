@@ -60,7 +60,6 @@ const releasedEntries = async (
 				}),
 				releaseSha: tag.sha,
 				catchUp: tag.sha !== plan.head || !built.has(unit.id),
-				pr: null,
 				forge: null,
 				line,
 				latest: line !== "maintenance" && tag.name === highest,

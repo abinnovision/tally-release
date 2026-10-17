@@ -44,7 +44,6 @@ expect:
         floatingTags: [a-v1]
         releaseSha: c3
         catchUp: false
-        pr: null
         forge: null
         line: default
         latest: true

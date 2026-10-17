@@ -17,7 +17,6 @@ const released = (id: string) => ({
 	floatingTags: [],
 	releaseSha: "abc",
 	catchUp: false,
-	pr: 1,
 	forge,
 	line: "default" as const,
 	latest: true,
@@ -37,22 +36,6 @@ const workspace = (
 	}) as unknown as Workspace;
 
 describe("releaseEntries", () => {
-	it("renders tagPrefix, null with text after the version or an unknown unit", () => {
-		const plan = {
-			head: "abc",
-			line: null,
-			released: ["a", "b", "c"].map(released),
-			units: [],
-		} as unknown as Plan;
-		const entries = releaseEntries(
-			plan,
-			workspace([{ id: "a" }, { id: "b", tagFormat: "v{version}-{id}" }]),
-			new Map(),
-		);
-
-		expect(entries.map((e) => e.tagPrefix)).toEqual(["a-v", null, null]);
-	});
-
 	it("lists tags, group and forge of a release, and the unit's tags and group with a null forge for a prerelease", () => {
 		const plan = {
 			head: "def",
@@ -66,6 +49,7 @@ describe("releaseEntries", () => {
 					tags: ["web"],
 					group: "g",
 					changes: [],
+					propagatedFrom: [],
 				},
 			],
 		} as unknown as Plan;
@@ -82,17 +66,16 @@ describe("releaseEntries", () => {
 		);
 
 		expect(
-			entries.map(({ id, tags, group, pr, forge: f }) => ({
+			entries.map(({ id, tags, group, forge: f }) => ({
 				id,
 				tags,
 				group,
-				pr,
 				forge: f,
 			})),
 		).toEqual([
-			{ id: "a", tags: ["api", "node"], group: "g", pr: 1, forge },
-			{ id: "c", tags: [], group: null, pr: 1, forge },
-			{ id: "b", tags: ["web"], group: "g", pr: null, forge: null },
+			{ id: "a", tags: ["api", "node"], group: "g", forge },
+			{ id: "c", tags: [], group: null, forge },
+			{ id: "b", tags: ["web"], group: "g", forge: null },
 		]);
 	});
 
@@ -107,21 +90,98 @@ describe("releaseEntries", () => {
 			line: null,
 			released: ["a", "b"].map(released),
 			units: [
-				{ id: "a", kind: "prerelease", version: "1.1.0-0", changes: [] },
+				{
+					id: "a",
+					kind: "prerelease",
+					version: "1.1.0-0",
+					changes: [],
+					propagatedFrom: [],
+				},
 				{
 					id: "b",
 					kind: "prerelease",
 					version: "1.1.0-0",
 					changes: [change("pending")],
+					propagatedFrom: [],
 				},
 			],
 		} as unknown as Plan;
 		const atParent = new Map([
-			["abc", [{ id: "a", changes: [change("released")] }]],
+			["abc", [{ id: "a", changes: [change("released")], propagatedFrom: [] }]],
 		]) as unknown as Map<string, Plan["units"]>;
 
 		expect(
 			releaseEntries(plan, workspace([]), atParent).map((e) => e.changes),
 		).toEqual([[change("released")], [], [], [change("pending")]]);
+	});
+
+	describe("propagated changes", () => {
+		const change = (sha: string | undefined, via?: string) => ({
+			type: "fix",
+			breaking: false,
+			subject: sha ?? "file",
+			...(sha === undefined ? {} : { sha }),
+			...(via === undefined ? {} : { via }),
+		});
+		const unit = (
+			id: string,
+			changes: ReturnType<typeof change>[],
+			propagatedFrom: string[] = [],
+		) => ({
+			id,
+			kind: "prerelease",
+			version: "1.1.0-0",
+			changes,
+			propagatedFrom,
+		});
+		const subjects = (e: { changes: { subject: string; via?: string }[] }) =>
+			e.changes.map((c) => [c.subject, c.via]);
+
+		it("lists the changes of the units a release was propagated from", () => {
+			const plan = { head: "def", line: null, released: [released("a")] };
+			const atParent = new Map([
+				[
+					"abc",
+					[
+						unit("a", [change("a1")], ["b", "d"]),
+						unit("b", [change("b1"), change("x1", "x")], ["c"]),
+						unit("c", [change("c1")]),
+						unit("d", [change("c1"), change("d1")], ["c"]),
+					],
+				],
+			]) as unknown as Map<string, Plan["units"]>;
+			const [entry] = releaseEntries(
+				{ ...plan, units: [] } as unknown as Plan,
+				workspace([]),
+				atParent,
+			);
+
+			expect(entry && subjects(entry)).toEqual([
+				["a1", undefined],
+				["b1", "b"],
+				["x1", "x"],
+				["c1", "c"],
+				["d1", "d"],
+			]);
+		});
+
+		it("terminates on a cycle and keeps sha-less changes", () => {
+			const plan = {
+				head: "def",
+				line: null,
+				released: [],
+				units: [
+					unit("a", [change(undefined)], ["b"]),
+					unit("b", [change(undefined), change("b1")], ["a"]),
+				],
+			} as unknown as Plan;
+			const [entry] = releaseEntries(plan, workspace([]), new Map());
+
+			expect(entry && subjects(entry)).toEqual([
+				["file", undefined],
+				["file", "b"],
+				["b1", "b"],
+			]);
+		});
 	});
 });

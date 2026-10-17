@@ -220,7 +220,7 @@ export const releasedForge = async (
 ): Promise<ReleasedUnit[]> => {
 	const { forge } = session;
 	if (!forge) {
-		return released.map((r) => ({ ...r, pr: null, forge: null }));
+		return released.map((r) => ({ ...r, forge: null }));
 	}
 
 	const shas = [
@@ -257,7 +257,6 @@ export const releasedForge = async (
 
 		return {
 			...r,
-			pr: pr?.number ?? null,
 			forge: { pr, release: url === null ? null : { url } },
 		};
 	});

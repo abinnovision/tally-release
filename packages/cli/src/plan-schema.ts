@@ -22,6 +22,7 @@ const changeSchema = z.strictObject({
 	subject: z.string(),
 	notes: z.string().exactOptional(),
 	pr: z.number().exactOptional(),
+	/** Unit that owns the change when it is not this unit's: absorbed, or propagated in a release entry. */
 	via: z.string().exactOptional(),
 	releaseAs: z.string().exactOptional(),
 });
@@ -103,8 +104,6 @@ export const planSchema = z.strictObject({
 			floatingTags: z.array(z.string()),
 			releaseSha: z.string(),
 			catchUp: z.boolean(),
-			/** Deprecated, `forge.pr.number`; removed with `tagPrefix` in a later 0.x. */
-			pr: z.number().nullable(),
 			forge: forgeSchema,
 			line: z.enum(["default", "maintenance"]),
 			latest: z.boolean(),
@@ -123,20 +122,14 @@ export const releaseEntrySchema = z.strictObject({
 	version: z.string(),
 	channel: z.string().nullable(),
 	tag: z.string().nullable(),
-	/** Literal part of the tag format before `{version}`; null for prereleases. */
-	tagPrefix: z.string().nullable(),
-	sha: z.string(),
 	releaseSha: z.string(),
 	/** Not built from HEAD by this run (release sha differs from HEAD, or the unit is outside the build set). */
 	catchUp: z.boolean(),
-	/** Deprecated, `forge.pr.number`; removed with `tagPrefix` in a later 0.x. */
-	pr: z.number().nullable(),
 	/** Null for prereleases. */
 	forge: forgeSchema,
-	line: z.enum(["default", "maintenance"]),
 	/** Highest stable version tagged for the unit, never on a maintenance line; false for prereleases. */
 	latest: z.boolean(),
-	/** Changes of the release; of a prerelease, those since the last stable release. */
+	/** Own changes, then those of the units it was propagated from (transitively), `via` naming the owning unit; of a prerelease, those since the last stable release. */
 	changes: z.array(changeSchema),
 	/** Sorted unit tags. */
 	tags: z.array(z.string()),
