@@ -1,10 +1,42 @@
 import type { ReleaseEntry } from "../plan-schema.js";
-import type { Plan, Workspace } from "@tallyrelease/core";
+import type { Plan, PlanChange, Workspace } from "@tallyrelease/core";
+
+/**
+ * Changes of unit `id`, then those of the units it was propagated from,
+ * transitively. A copied change keeps its `via`, else gets the id of the unit
+ * it came from. Shared shas are listed once, sha-less changes always.
+ */
+const propagatedChanges = (units: Plan["units"], id: string): PlanChange[] => {
+	const seenUnits = new Set<string>();
+	const seenShas = new Set<string>();
+	const visit = (uid: string, via?: string): PlanChange[] => {
+		const unit = units.find((u) => u.id === uid);
+		if (!unit || seenUnits.has(uid)) {
+			return [];
+		}
+
+		seenUnits.add(uid);
+		const own = unit.changes
+			.filter((c) => c.sha === undefined || !seenShas.has(c.sha))
+			.map((c) => {
+				if (c.sha !== undefined) {
+					seenShas.add(c.sha);
+				}
+
+				return c.via === undefined && via !== undefined ? { ...c, via } : c;
+			});
+
+		return [...own, ...unit.propagatedFrom.flatMap((p) => visit(p, p))];
+	};
+
+	return visit(id);
+};
 
 /**
  * Releases first (`plan.released` order), then the prereleases in plan unit
- * order, none for a unit released at HEAD. A release lists the unit's changes
- * in `atParent`, the plan units at the first parent of each release sha.
+ * order, none for a unit released at HEAD. A release lists the changes of the
+ * unit in `atParent`, the plan units at the first parent of each release sha;
+ * a prerelease those in `plan.units`. Both include propagated changes.
  */
 export const releaseEntries = (
 	plan: Plan,
@@ -15,15 +47,6 @@ export const releaseEntries = (
 	const group = new Map(
 		groups.flatMap((g) => g.members.map((id) => [id, g.name])),
 	);
-	// Null when text follows `{version}`: the git rule needs a plain prefix.
-	const prefix = new Map(
-		units.map((u) => {
-			const [head = "", tail = ""] = u.tagFormat.split("{version}");
-
-			return [u.id, tail === "" ? head.replaceAll("{id}", u.id) : null];
-		}),
-	);
-	const line = plan.line?.kind ?? "default";
 	const atHead = new Set(
 		plan.released.filter((r) => r.releaseSha === plan.head).map((r) => r.id),
 	);
@@ -36,16 +59,11 @@ export const releaseEntries = (
 			version: r.version,
 			channel: null,
 			tag: r.tag,
-			tagPrefix: prefix.get(r.id) ?? null,
-			sha: r.releaseSha,
 			releaseSha: r.releaseSha,
 			catchUp: r.catchUp,
-			pr: r.pr,
 			forge: r.forge,
-			line: r.line,
 			latest: r.latest,
-			changes:
-				atParent.get(r.releaseSha)?.find((u) => u.id === r.id)?.changes ?? [],
+			changes: propagatedChanges(atParent.get(r.releaseSha) ?? [], r.id),
 			tags: tags.get(r.id) ?? [],
 			group: group.get(r.id) ?? null,
 		})),
@@ -59,15 +77,11 @@ export const releaseEntries = (
 							version: u.version,
 							channel: plan.line?.channel ?? null,
 							tag: null,
-							tagPrefix: null,
-							sha: plan.head,
 							releaseSha: plan.head,
 							catchUp: false,
-							pr: null,
 							forge: null,
-							line,
 							latest: false,
-							changes: u.changes,
+							changes: propagatedChanges(plan.units, u.id),
 							tags: u.tags,
 							group: u.group,
 						},
