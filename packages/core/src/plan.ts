@@ -557,6 +557,8 @@ export interface ReleasedUnit {
 	catchUp: boolean;
 	pr: number | null;
 	line: "default" | "maintenance";
+	/** Highest stable version tagged for the unit, never on a maintenance line. */
+	latest: boolean;
 }
 
 /** `tallyrelease plan --json`, schema 1. */

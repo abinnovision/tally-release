@@ -46,4 +46,5 @@ expect:
         catchUp: false
         pr: null
         line: default
+        latest: true
     warnings: []

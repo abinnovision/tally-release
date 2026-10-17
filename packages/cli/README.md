@@ -132,6 +132,7 @@ With `--github-output`, `run` writes two outputs to `$GITHUB_OUTPUT`:
 | `catchUp`    | `true` for a release not built from HEAD: its commit is not HEAD, or its unit is outside the build set (also at HEAD). Every `false` entry belongs to a unit in the build set.                      |
 | `pr`         | Number of the release PR, else `null`.                                                                                                                                                              |
 | `line`       | `default` or `maintenance`.                                                                                                                                                                         |
+| `latest`     | `true` for the unit's highest stable tag, never on a maintenance line, `false` for a prerelease. Replaces the git rule on `tagPrefix`.                                                              |
 | `changes`    | Changes in the shape of the plan's `units[].changes`: those of the release, or for a prerelease those since the last stable release.                                                                |
 
 The entry schema is `releaseEntrySchema` in `src/plan-schema.ts`.

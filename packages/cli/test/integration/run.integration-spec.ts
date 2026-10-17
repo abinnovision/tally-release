@@ -493,10 +493,10 @@ describe("run --github-output with several releases of a unit", () => {
 		const releases = z
 			.array(releaseEntrySchema)
 			.parse(JSON.parse(line?.slice("releases=".length) ?? "null"));
-		expect(releases.map((r) => [r.tag, r.releaseSha])).toEqual([
-			["b-v1.0.5", "c1"],
-			["a-v1.1.0", "merge-1"],
-			["b-v1.1.0", "merge-1"],
+		expect(releases.map((r) => [r.tag, r.releaseSha, r.latest])).toEqual([
+			["b-v1.0.5", "c1", false],
+			["a-v1.1.0", "merge-1", true],
+			["b-v1.1.0", "merge-1", true],
 		]);
 	});
 });

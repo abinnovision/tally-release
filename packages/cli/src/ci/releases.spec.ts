@@ -14,6 +14,7 @@ const released = (id: string) => ({
 	catchUp: false,
 	pr: null,
 	line: "default" as const,
+	latest: true,
 });
 
 describe("releaseEntries", () => {
