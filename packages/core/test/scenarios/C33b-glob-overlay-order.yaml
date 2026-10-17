@@ -1,0 +1,22 @@
+description: >-
+  Globs apply in declaration order; a later glob wins per field and fields it
+  does not set keep the earlier value.
+config:
+  plugins: { stub: {} }
+  units:
+    "apps/*": { release: true, tagFormat: "{id}@{version}", tags: [docker] }
+    "*/web": { tagFormat: "web-v{version}" }
+plugins:
+  - name: stub
+    units:
+      - { id: web, root: apps/web }
+      - { id: api, root: apps/api }
+git:
+  commits:
+    - id: c0
+      files: { apps/web/a.ts: "1", apps/api/a.ts: "1" }
+base: null
+expect:
+  units:
+    - { id: api, version: tag, tagFormat: "{id}@{version}", tags: [docker] }
+    - { id: web, version: tag, tagFormat: "web-v{version}", tags: [docker] }

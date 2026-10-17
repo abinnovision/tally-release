@@ -35,6 +35,15 @@ units:
   packages/api: { release: true, tags: [npm] }
 ```
 
+A key with `*` is a glob over unit roots: `*` is one path segment and skips dot directories (`apps/*` does not match `apps/web/sub`). Globs apply in declaration order, exact keys win field by field, and `id`, `include`, `exclude` and `versionFiles` are not allowed on a glob key. A glob never creates a unit and warns `W_UNIT_GLOB_UNMATCHED` when it matches nothing.
+
+```yaml
+units:
+  "apps/*": { release: true, tags: [docker] } # * is one segment, skips dot dirs
+  "packages/*": { release: true, tags: [npm] }
+  packages/tsconfig: { release: false } # exact key wins field by field
+```
+
 ## Commands
 
 Global flags: `--cwd <dir>` (repository root), `--config <file>` (default `tallyrelease.yaml`), `--token <token>` (forge token, default `GITHUB_TOKEN`), `--verbose`.

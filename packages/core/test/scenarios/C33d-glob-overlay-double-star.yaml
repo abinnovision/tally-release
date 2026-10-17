@@ -1,0 +1,13 @@
+description: A glob key accepts "*" only as a whole segment, not "**".
+config:
+  plugins: {}
+  units:
+    "apps/**": { release: true }
+git:
+  commits:
+    - id: c0
+      files: { apps/web/a.ts: "1" }
+base: null
+error:
+  code: E_UNIT_GLOB
+  details: { key: "apps/**" }

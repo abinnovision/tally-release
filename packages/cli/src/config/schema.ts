@@ -31,6 +31,8 @@ const groupTags = z
 	.array(z.string())
 	.meta({ description: "Selects released units with any of these tags." });
 
+const globRejected = ["id", "include", "exclude", "versionFiles"] as const;
+
 const unitOverlay = z.strictObject({
 	id: z
 		.string()
@@ -141,9 +143,23 @@ export const configSchema = z.strictObject({
 		.exactOptional(),
 	units: z
 		.record(z.string(), unitOverlay)
+		.superRefine((units, ctx) => {
+			for (const [key, overlay] of Object.entries(units)) {
+				const field = key.includes("*")
+					? globRejected.find((f) => overlay[f] !== undefined)
+					: undefined;
+				if (field !== undefined) {
+					ctx.addIssue({
+						code: "custom",
+						path: [key, field],
+						message: `unit overlay "${key}" cannot set "${field}" on a glob key`,
+					});
+				}
+			}
+		})
 		.meta({
 			description:
-				"Unit overlays keyed by root path. A root without a discovered unit becomes a config-only unit.",
+				"Unit overlays keyed by root path or glob. A root without a discovered unit becomes a config-only unit. In a glob key, * matches one path segment and skips dot directories; globs never create units, cannot set id, include, exclude or versionFiles, and exact keys win over them per field.",
 		})
 		.exactOptional(),
 	deps: z

@@ -1,0 +1,13 @@
+description: A glob overlay cannot set the unit id.
+config:
+  plugins: {}
+  units:
+    "apps/*": { id: x }
+git:
+  commits:
+    - id: c0
+      files: { apps/web/a.ts: "1" }
+base: null
+error:
+  code: E_UNIT_GLOB
+  details: { key: "apps/*", field: id }

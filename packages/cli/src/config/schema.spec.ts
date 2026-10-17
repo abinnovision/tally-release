@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-import { configJsonSchema } from "./schema.js";
+import { configJsonSchema, configSchema } from "./schema.js";
 
 const read = (path: string) =>
 	readFileSync(new URL(path, import.meta.url), "utf8");
@@ -62,6 +62,23 @@ describe("configJsonSchema", () => {
 		expect(validate({ groups: { sdk: {} } })).toBe(false);
 		expect(validate({ groups: {} })).toBe(false);
 		expect(validate({ groups: { sdk: { units: ["a b"] } } })).toBe(false);
+	});
+
+	it("rejects id, include, exclude and versionFiles on glob unit keys", () => {
+		expect(
+			configSchema.safeParse({
+				units: { "apps/*": { release: true }, "apps/web": { id: "web" } },
+			}).success,
+		).toBe(true);
+		expect(
+			configSchema.safeParse({ units: { "apps/*": { id: "x" } } }).error
+				?.issues,
+		).toMatchObject([
+			{
+				path: ["units", "apps/*", "id"],
+				message: 'unit overlay "apps/*" cannot set "id" on a glob key',
+			},
+		]);
 	});
 
 	it("rejects version none and unknown keys", () => {
