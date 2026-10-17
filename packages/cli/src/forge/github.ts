@@ -28,6 +28,7 @@ const unless = async <T>(
 
 interface PullData {
 	number: number;
+	html_url: string;
 	head: { ref: string; sha: string };
 	base: { ref: string };
 	body: string | null;
@@ -38,6 +39,7 @@ interface PullData {
 
 const releasePr = (pr: PullData): ReleasePr => ({
 	number: pr.number,
+	url: pr.html_url,
 	head: pr.head.ref,
 	headSha: pr.head.sha,
 	base: pr.base.ref,
@@ -234,7 +236,13 @@ export const githubForge = (opts: GithubForgeOptions): Forge => {
 				prs?.data.find((p) => p.merge_commit_sha === sha) ??
 				prs?.data.find((p) => p.merged_at !== null);
 
-			return pr && { number: pr.number, labels: pr.labels.map((l) => l.name) };
+			return (
+				pr && {
+					number: pr.number,
+					url: pr.html_url,
+					labels: pr.labels.map((l) => l.name),
+				}
+			);
 		},
 		releaseByTag: async (repo, tag) => {
 			const release = await unless(

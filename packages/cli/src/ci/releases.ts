@@ -41,6 +41,7 @@ export const releaseEntries = (
 			releaseSha: r.releaseSha,
 			catchUp: r.catchUp,
 			pr: r.pr,
+			forge: r.forge,
 			line: r.line,
 			latest: r.latest,
 			changes:
@@ -63,6 +64,7 @@ export const releaseEntries = (
 							releaseSha: plan.head,
 							catchUp: false,
 							pr: null,
+							forge: null,
 							line,
 							latest: false,
 							changes: u.changes,

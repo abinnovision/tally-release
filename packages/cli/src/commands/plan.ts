@@ -203,39 +203,64 @@ export const planOptions = async (
 	};
 };
 
+/** Forge facts known from a reconcile, by tag. */
+export interface KnownForge {
+	prs: ReadonlyMap<string, { number: number; url: string }>;
+	releases: ReadonlyMap<string, string | null>;
+}
+
 /**
- * `released` with `pr` from `known` (tag to PR number), else the PR that
- * merged the release commit, else null (also without a forge).
+ * `released` with `forge` from `known`, else the PR that merged the release
+ * commit and the release of the tag; `forge` is null without a forge.
  */
-export const releasedPrs = async (
+export const releasedForge = async (
 	session: Session,
 	released: readonly ReleasedUnit[],
-	known: ReadonlyMap<string, number> = new Map(),
+	known: KnownForge = { prs: new Map(), releases: new Map() },
 ): Promise<ReleasedUnit[]> => {
 	const { forge } = session;
-	const shas = [
-		...new Set(
-			released.filter((r) => !known.has(r.tag)).map((r) => r.releaseSha),
-		),
-	];
-	const prs = new Map<string, number>();
-	if (forge && shas.length > 0) {
-		const repo = await repoRef(session);
-		const found = await Promise.all(
-			shas.map(async (sha) => await forge.prForCommit(repo, sha)),
-		);
-		shas.forEach((sha, i) => {
-			const number = found[i]?.number;
-			if (number !== undefined) {
-				prs.set(sha, number);
-			}
-		});
+	if (!forge) {
+		return released.map((r) => ({ ...r, pr: null, forge: null }));
 	}
 
-	return released.map((r) => ({
-		...r,
-		pr: known.get(r.tag) ?? prs.get(r.releaseSha) ?? null,
-	}));
+	const shas = [
+		...new Set(
+			released.filter((r) => !known.prs.has(r.tag)).map((r) => r.releaseSha),
+		),
+	];
+	const tags = released.map((r) => r.tag).filter((t) => !known.releases.has(t));
+	const repo =
+		shas.length > 0 || tags.length > 0 ? await repoRef(session) : undefined;
+	const [foundPrs, foundReleases] = repo
+		? await Promise.all([
+				Promise.all(
+					shas.map(async (sha) => await forge.prForCommit(repo, sha)),
+				),
+				Promise.all(tags.map(async (t) => await forge.releaseByTag(repo, t))),
+			])
+		: [[], []];
+	const prs = new Map(
+		shas.map((sha, i) => {
+			const pr = foundPrs[i];
+
+			return [sha, pr ? { number: pr.number, url: pr.url } : null];
+		}),
+	);
+	const releases = new Map(
+		tags.map((t, i) => [t, foundReleases[i]?.url ?? null]),
+	);
+
+	return released.map((r) => {
+		const url = known.releases.get(r.tag) ?? releases.get(r.tag) ?? null;
+
+		const pr = known.prs.get(r.tag) ?? prs.get(r.releaseSha) ?? null;
+
+		return {
+			...r,
+			pr: pr?.number ?? null,
+			forge: { pr, release: url === null ? null : { url } },
+		};
+	});
 };
 
 /** Writes `doc` to `--out`, `$GITHUB_OUTPUT`, the step summary and stdout. */
@@ -311,11 +336,11 @@ export const plan = async (
 		{ ...opts, all: flags.all ?? false },
 		{ released: true },
 	);
-	// A forge request failure leaves the PR numbers null; plan stays lenient.
+	// A forge request failure leaves `forge` null; plan stays lenient.
 	let { released } = planned;
 	const prWarnings: Warning[] = [];
 	try {
-		released = await releasedPrs(session, released);
+		released = await releasedForge(session, released);
 	} catch (error) {
 		if (error instanceof TallyError) {
 			throw error;
@@ -323,7 +348,7 @@ export const plan = async (
 
 		prWarnings.push({
 			code: "W_FORGE_ERROR",
-			message: `cannot read the PRs of released commits: ${error instanceof Error ? error.message : String(error)}`,
+			message: `cannot read the PRs and releases of released commits: ${error instanceof Error ? error.message : String(error)}`,
 		});
 	}
 

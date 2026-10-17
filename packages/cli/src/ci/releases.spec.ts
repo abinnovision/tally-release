@@ -4,6 +4,11 @@ import { releaseEntries } from "./releases.js";
 
 import type { Plan, Workspace } from "@tallyrelease/core";
 
+const forge = {
+	pr: { number: 1, url: "pull/1" },
+	release: { url: "release/a-v1.0.0" },
+};
+
 const released = (id: string) => ({
 	id,
 	path: id,
@@ -12,7 +17,8 @@ const released = (id: string) => ({
 	floatingTags: [],
 	releaseSha: "abc",
 	catchUp: false,
-	pr: null,
+	pr: 1,
+	forge,
 	line: "default" as const,
 	latest: true,
 });
@@ -47,7 +53,7 @@ describe("releaseEntries", () => {
 		expect(entries.map((e) => e.tagPrefix)).toEqual(["a-v", null, null]);
 	});
 
-	it("lists the unit's tags and group, [] and null for an unknown unit", () => {
+	it("lists tags, group and forge of a release, and the unit's tags and group with a null forge for a prerelease", () => {
 		const plan = {
 			head: "def",
 			line: null,
@@ -75,13 +81,19 @@ describe("releaseEntries", () => {
 			new Map(),
 		);
 
-		expect(entries.map(({ id, tags, group }) => ({ id, tags, group }))).toEqual(
-			[
-				{ id: "a", tags: ["api", "node"], group: "g" },
-				{ id: "c", tags: [], group: null },
-				{ id: "b", tags: ["web"], group: "g" },
-			],
-		);
+		expect(
+			entries.map(({ id, tags, group, pr, forge: f }) => ({
+				id,
+				tags,
+				group,
+				pr,
+				forge: f,
+			})),
+		).toEqual([
+			{ id: "a", tags: ["api", "node"], group: "g", pr: 1, forge },
+			{ id: "c", tags: [], group: null, pr: 1, forge },
+			{ id: "b", tags: ["web"], group: "g", pr: null, forge: null },
+		]);
 	});
 
 	it("lists the changes at the release's parent, [] for a missing unit, and HEAD's for a prerelease", () => {

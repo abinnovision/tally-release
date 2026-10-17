@@ -34,7 +34,8 @@ const releaseName = ({ tag, version }: ReleasedUnit): string =>
 /**
  * GitHub release per entry unless one exists (a 422 on create means it does);
  * latest for entries marked `latest`. Returns the tags of the missing
- * releases, created unless `dryRun`.
+ * releases, created unless `dryRun`, and the release URL of every entry,
+ * null for one not created in a dry run.
  */
 const createReleases = async (
 	session: Session,
@@ -52,21 +53,25 @@ const createReleases = async (
 		dryRun: boolean | undefined;
 	},
 	{ released }: { released: readonly ReleasedUnit[] },
-): Promise<string[]> => {
+): Promise<{ created: string[]; urls: Map<string, string | null> }> => {
 	const created: string[] = [];
+	const urls = new Map<string, string | null>();
 	/* eslint-disable no-await-in-loop -- sequential, avoids secondary rate limits */
 	for (const r of released) {
-		if ((await forge.releaseByTag(repo, r.tag)) !== undefined) {
+		const existing = await forge.releaseByTag(repo, r.tag);
+		if (existing !== undefined) {
+			urls.set(r.tag, existing.url);
 			continue;
 		}
 
 		created.push(r.tag);
 		if (dryRun) {
+			urls.set(r.tag, null);
 			continue;
 		}
 
 		try {
-			await forge.createRelease(repo, {
+			const release = await forge.createRelease(repo, {
 				tag: r.tag,
 				name: releaseName(r),
 				body:
@@ -75,15 +80,18 @@ const createReleases = async (
 					) ?? "",
 				makeLatest: r.latest,
 			});
+			urls.set(r.tag, release.url);
 		} catch (error) {
 			if ((error as { status?: unknown } | null)?.status !== 422) {
 				throw error;
 			}
+
+			urls.set(r.tag, (await forge.releaseByTag(repo, r.tag))?.url ?? null);
 		}
 	}
 	/* eslint-enable no-await-in-loop */
 
-	return created;
+	return { created, urls };
 };
 
 /**
@@ -166,7 +174,11 @@ export interface ReleaseFlags {
 /** A merged release PR tagged by `reconcile`, with its version tags. */
 export interface Reconciled {
 	number: number;
+	/** Web URL of the PR. */
+	url: string;
 	tags: string[];
+	/** Forge release URL by tag of the released units; null when not created in a dry run. */
+	releases: Map<string, string | null>;
 	/** Merge commit the tags point at. */
 	sha: string;
 	/** Plan units at the first parent of `sha`. */
@@ -344,7 +356,7 @@ export const reconcile = async (
 			}
 		}
 
-		const created = await createReleases(
+		const { created, urls } = await createReleases(
 			session,
 			{
 				forge,
@@ -368,7 +380,9 @@ export const reconcile = async (
 		lines.push(`${label}: ${labelled} released`);
 		reconciled.push({
 			number: pr.number,
+			url: pr.url,
 			tags,
+			releases: urls,
 			sha: mergeSha,
 			units: plan.units,
 		});
