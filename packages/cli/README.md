@@ -134,6 +134,8 @@ With `--github-output`, `run` writes two outputs to `$GITHUB_OUTPUT`:
 | `line`       | `default` or `maintenance`.                                                                                                                                                                         |
 | `latest`     | `true` for the unit's highest stable tag, never on a maintenance line, `false` for a prerelease. Replaces the git rule on `tagPrefix`.                                                              |
 | `changes`    | Changes in the shape of the plan's `units[].changes`: those of the release, or for a prerelease those since the last stable release.                                                                |
+| `tags`       | The unit's tags, sorted.                                                                                                                                                                            |
+| `group`      | Name of the unit's fixed group, else `null`.                                                                                                                                                        |
 
 The entry schema is `releaseEntrySchema` in `src/plan-schema.ts`.
 

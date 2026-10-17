@@ -1,5 +1,5 @@
 import type { ReleaseEntry } from "../plan-schema.js";
-import type { Plan, Unit } from "@tallyrelease/core";
+import type { Plan, Workspace } from "@tallyrelease/core";
 
 /**
  * Releases first (`plan.released` order), then the prereleases in plan unit
@@ -8,9 +8,13 @@ import type { Plan, Unit } from "@tallyrelease/core";
  */
 export const releaseEntries = (
 	plan: Plan,
-	units: readonly Pick<Unit, "id" | "tagFormat">[],
+	{ units, groups }: Pick<Workspace, "units" | "groups">,
 	atParent: ReadonlyMap<string, Plan["units"]>,
 ): ReleaseEntry[] => {
+	const tags = new Map(units.map((u) => [u.id, [...u.tags]]));
+	const group = new Map(
+		groups.flatMap((g) => g.members.map((id) => [id, g.name])),
+	);
 	// Null when text follows `{version}`: the git rule needs a plain prefix.
 	const prefix = new Map(
 		units.map((u) => {
@@ -41,6 +45,8 @@ export const releaseEntries = (
 			latest: r.latest,
 			changes:
 				atParent.get(r.releaseSha)?.find((u) => u.id === r.id)?.changes ?? [],
+			tags: tags.get(r.id) ?? [],
+			group: group.get(r.id) ?? null,
 		})),
 		...plan.units.flatMap((u): ReleaseEntry[] =>
 			u.kind === "prerelease" && u.version !== null && !atHead.has(u.id)
@@ -60,6 +66,8 @@ export const releaseEntries = (
 							line,
 							latest: false,
 							changes: u.changes,
+							tags: u.tags,
+							group: u.group,
 						},
 					]
 				: [],

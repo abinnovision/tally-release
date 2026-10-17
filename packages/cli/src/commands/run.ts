@@ -101,7 +101,7 @@ export const run = async (session: Session, flags: RunFlags): Promise<void> => {
 				...atHead,
 				released: await releasedFromTags(workspace, atHead, { git, tags }),
 			},
-			units: workspace.units,
+			workspace,
 		};
 	});
 	const known = new Map(
@@ -138,7 +138,7 @@ export const run = async (session: Session, flags: RunFlags): Promise<void> => {
 
 	writePlan(
 		runSession,
-		{ doc, base, releases: releaseEntries(doc, planned.units, atParent) },
+		{ doc, base, releases: releaseEntries(doc, planned.workspace, atParent) },
 		flags,
 	);
 };

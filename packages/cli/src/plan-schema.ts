@@ -123,6 +123,10 @@ export const releaseEntrySchema = z.strictObject({
 	latest: z.boolean(),
 	/** Changes of the release; of a prerelease, those since the last stable release. */
 	changes: z.array(changeSchema),
+	/** Sorted unit tags. */
+	tags: z.array(z.string()),
+	/** Fixed group of the unit. */
+	group: z.string().nullable(),
 });
 
 export type ReleaseEntry = z.infer<typeof releaseEntrySchema>;
