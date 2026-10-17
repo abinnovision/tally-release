@@ -553,6 +553,7 @@ export interface ReleasedUnit {
 	tag: string;
 	floatingTags: string[];
 	releaseSha: string;
+	/** Not built from HEAD by this run (release sha differs from HEAD, or the unit is outside the build set). */
 	catchUp: boolean;
 	pr: number | null;
 	line: "default" | "maintenance";

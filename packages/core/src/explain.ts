@@ -1,4 +1,5 @@
 import { attribution, matcher } from "./attribution.js";
+import { changelogPath } from "./changelog.js";
 import { TallyError } from "./errors.js";
 import { planWithFacts } from "./plan.js";
 
@@ -70,10 +71,20 @@ export const explainUnit = async (
 	const ignored = matcher(workspace.ignore);
 	const isGlobal = matcher(workspace.globalInputs);
 	const owners = attribution(workspace.units);
+	// As in `computeAffected`: a released unit owns its changelog.
+	const changelogs = new Map(
+		workspace.units
+			.filter((u) => u.version !== "none")
+			.map((u) => [changelogPath(u), u.id]),
+	);
 	const owned = (files: readonly string[], owner: string) =>
-		files.filter(
-			(f) => !ignored(f) && !isGlobal(f) && owners(f).includes(owner),
-		);
+		files.filter((f) => {
+			const own = changelogs.get(f);
+
+			return own === undefined
+				? !ignored(f) && !isGlobal(f) && owners(f).includes(owner)
+				: own === owner && !isGlobal(f);
+		});
 
 	const { base } = plan.build;
 	const reason = unit?.affected?.reason;

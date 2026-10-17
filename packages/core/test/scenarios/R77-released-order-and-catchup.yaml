@@ -31,7 +31,9 @@ git:
       files: { packages/g1/CHANGELOG.md: "1.1.0" }
     - id: c2
       message: "chore(release): a@1.0.1, z@1.0.1"
-      files: { packages/a/CHANGELOG.md: "1.0.1" }
+      files:
+        packages/a/CHANGELOG.md: "1.0.1"
+        packages/z/CHANGELOG.md: "1.0.1"
   tags:
     - { name: a-v1.0.0, commit: c0 }
     - { name: z-v1.0.0, commit: c0 }

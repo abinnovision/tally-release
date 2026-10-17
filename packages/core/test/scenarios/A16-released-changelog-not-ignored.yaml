@@ -1,0 +1,28 @@
+description: >-
+  A released unit's changelog is attributed to it despite ignore; the
+  changelog of an unreleased unit stays ignored.
+config:
+  plugins: { stub: {} }
+  ignore: ["**/*.md"]
+  units:
+    infra/tf: { id: tf, release: true }
+plugins:
+  - name: stub
+    units:
+      - { id: a, root: packages/a }
+git:
+  commits:
+    - id: c0
+      files: { infra/tf/main.tf: "1", packages/a/index.ts: "1" }
+    - id: c1
+      files:
+        infra/tf/CHANGELOG.md: "1"
+        packages/a/CHANGELOG.md: "1"
+        README.md: "1"
+base: c0
+expect:
+  affected:
+    build: { all: false, globalInputs: [] }
+    units:
+      - { id: tf, reason: direct, released: true }
+    unattributed: []

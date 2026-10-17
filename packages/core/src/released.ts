@@ -34,6 +34,9 @@ const releasedEntries = async (
 		schemeRegistry(workspace.schemes),
 	);
 	const line = plan.line?.kind ?? "default";
+	const built = new Set(
+		plan.units.filter((u) => u.affected !== null).map((u) => u.id),
+	);
 	const candidates = workspace.units.flatMap((unit) => {
 		const m = matched.get(unit.id);
 		if (!m) {
@@ -55,7 +58,7 @@ const releasedEntries = async (
 					formats: workspace.release.floating,
 				}),
 				releaseSha: tag.sha,
-				catchUp: tag.sha !== plan.head,
+				catchUp: tag.sha !== plan.head || !built.has(unit.id),
 				pr: null,
 				line,
 			}));
@@ -87,7 +90,8 @@ const releasedEntries = async (
  * `plan` with `released`: stable unit tags whose commit is on HEAD's
  * first-parent chain and not an ancestor of `build.base`. With a null base
  * only tags at HEAD, warning `W_RELEASED_NO_BASE` when earlier releases on the
- * chain are left out.
+ * chain are left out. A release at HEAD of a unit outside the build set warns
+ * `W_RELEASE_NOT_BUILT`.
  */
 export const withReleased = async (
 	workspace: Workspace,
@@ -120,8 +124,8 @@ export const withReleased = async (
 			return true;
 		},
 	});
-	const warnings: Warning[] =
-		omitted === 0
+	const warnings: Warning[] = [
+		...(omitted === 0
 			? []
 			: [
 					{
@@ -129,7 +133,15 @@ export const withReleased = async (
 						message:
 							"the build base is unknown; released leaves out earlier releases on the first-parent chain",
 					},
-				];
+				]),
+		...released
+			.filter((r) => r.releaseSha === head && r.catchUp)
+			.map((r) => ({
+				code: "W_RELEASE_NOT_BUILT",
+				message: `release ${r.tag} is at HEAD but unit ${r.id} is not in the build set; it is listed as a catch-up`,
+				unit: r.id,
+			})),
+	];
 
 	return { ...plan, released, warnings: [...plan.warnings, ...warnings] };
 };
