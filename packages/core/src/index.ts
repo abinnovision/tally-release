@@ -87,7 +87,7 @@ export { computePlan } from "./plan.js";
 export { decodeMarker, encodeMarker } from "./marker.js";
 export { activatePlugins } from "./plugins.js";
 export { planEquals, releaseEntries, releaseItems } from "./release-items.js";
-export { highestReleases, releasedFromTags, withReleased } from "./released.js";
+export { releasedFromTags, withReleased } from "./released.js";
 export { semver } from "./semver.js";
 export { validateRelease, validateTags } from "./validate.js";
 export { releaseFiles, versionFileClaims } from "./version-files.js";

@@ -44,6 +44,7 @@ const releasedEntries = async (
 		}
 
 		const names = m.tags.map((t) => t.name);
+		const highest = m.tags.findLast((t) => stable(m.scheme, t.version))?.name;
 
 		return m.tags
 			.filter((tag) => stable(m.scheme, tag.version))
@@ -61,6 +62,7 @@ const releasedEntries = async (
 				catchUp: tag.sha !== plan.head || !built.has(unit.id),
 				pr: null,
 				line,
+				latest: line !== "maintenance" && tag.name === highest,
 			}));
 	});
 	const kept = await Promise.all(
@@ -162,23 +164,4 @@ export const releasedFromTags = async (
 		git,
 		keep: (tag) => names.has(tag.name),
 	});
-};
-
-/** Tag of the highest stable version of each released unit with one. */
-export const highestReleases = async (
-	workspace: Workspace,
-	{ git }: { git: GitReader },
-): Promise<Set<string>> => {
-	const matched = matchUnitTags(
-		workspace.units,
-		await git.tags(),
-		schemeRegistry(workspace.schemes),
-	);
-
-	return new Set(
-		[...matched.values()].flatMap(
-			({ scheme, tags }) =>
-				tags.findLast((t) => stable(scheme, t.version))?.name ?? [],
-		),
-	);
 };

@@ -95,6 +95,7 @@ export const planSchema = z.strictObject({
 			catchUp: z.boolean(),
 			pr: z.number().nullable(),
 			line: z.enum(["default", "maintenance"]),
+			latest: z.boolean(),
 		}),
 	),
 }) satisfies z.ZodType<Plan>;
@@ -118,6 +119,8 @@ export const releaseEntrySchema = z.strictObject({
 	catchUp: z.boolean(),
 	pr: z.number().nullable(),
 	line: z.enum(["default", "maintenance"]),
+	/** Highest stable version tagged for the unit, never on a maintenance line; false for prereleases. */
+	latest: z.boolean(),
 	/** Changes of the release; of a prerelease, those since the last stable release. */
 	changes: z.array(changeSchema),
 });

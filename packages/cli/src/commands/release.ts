@@ -1,7 +1,6 @@
 import {
 	computePlan,
 	decodeMarker,
-	highestReleases,
 	planEquals,
 	releasedFromTags,
 	releaseNotes,
@@ -34,8 +33,8 @@ const releaseName = ({ tag, version }: ReleasedUnit): string =>
 
 /**
  * GitHub release per entry unless one exists (a 422 on create means it does);
- * latest only for the unit's highest stable tag on a default line. Returns the
- * tags of the missing releases, created unless `dryRun`.
+ * latest for entries marked `latest`. Returns the tags of the missing
+ * releases, created unless `dryRun`.
  */
 const createReleases = async (
 	session: Session,
@@ -52,9 +51,8 @@ const createReleases = async (
 		workspace: Workspace;
 		dryRun: boolean | undefined;
 	},
-	{ released, git }: { released: readonly ReleasedUnit[]; git: RepoGit },
+	{ released }: { released: readonly ReleasedUnit[] },
 ): Promise<string[]> => {
-	const highest = await highestReleases(workspace, { git });
 	const created: string[] = [];
 	/* eslint-disable no-await-in-loop -- sequential, avoids secondary rate limits */
 	for (const r of released) {
@@ -75,7 +73,7 @@ const createReleases = async (
 					releaseNotes(workspace, r.id, (path) =>
 						session.readAt(mergeSha, path),
 					) ?? "",
-				makeLatest: r.line !== "maintenance" && highest.has(r.tag),
+				makeLatest: r.latest,
 			});
 		} catch (error) {
 			if ((error as { status?: unknown } | null)?.status !== 422) {
@@ -355,7 +353,7 @@ export const reconcile = async (
 				workspace,
 				dryRun: flags.dryRun,
 			},
-			{ released, git },
+			{ released },
 		);
 		if (created.length > 0) {
 			lines.push(

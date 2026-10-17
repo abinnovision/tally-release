@@ -38,6 +38,7 @@ export const releaseEntries = (
 			catchUp: r.catchUp,
 			pr: r.pr,
 			line: r.line,
+			latest: r.latest,
 			changes:
 				atParent.get(r.releaseSha)?.find((u) => u.id === r.id)?.changes ?? [],
 		})),
@@ -57,6 +58,7 @@ export const releaseEntries = (
 							catchUp: false,
 							pr: null,
 							line,
+							latest: false,
 							changes: u.changes,
 						},
 					]
