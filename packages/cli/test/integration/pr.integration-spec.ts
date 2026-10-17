@@ -100,7 +100,7 @@ describe("pr", () => {
 
 		expect(await pr()).toEqual({
 			code: 0,
-			stdout: `created PR #1 ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			stdout: `created PR #1 ${SHARED}: chore(release): main\n`,
 			stderr: "",
 		});
 		const sha = remote.branches.get(SHARED) ?? "";
@@ -115,7 +115,7 @@ describe("pr", () => {
 		]);
 		expect(remote.commits.get(sha)).toMatchObject({
 			parent: "c2",
-			message: "chore(release): a@1.1.0, b@1.1.0",
+			message: "chore(release): main",
 		});
 		expect(files(SHARED)).toEqual([
 			"packages/a/CHANGELOG.md",
@@ -188,7 +188,7 @@ describe("pr", () => {
 		expect(body.length).toBeLessThan(60_000);
 		expect(body).toContain("_The changelog is truncated;");
 		expect(decodeMarker(body)?.releases).toHaveLength(200);
-		const title = "chore(release): 200 releases on main";
+		const title = "chore(release): main";
 		expect(remote.prs[0]?.title).toBe(title);
 		expect(remote.commits.get(remote.prs[0]?.headSha ?? "")?.message).toBe(
 			title,
@@ -204,7 +204,7 @@ describe("pr", () => {
 
 		const calls = methods().length;
 		expect((await pr([], { day: "2026-10-16" })).stdout).toBe(
-			`updated PR #1 ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			`updated PR #1 ${SHARED}: chore(release): main\n`,
 		);
 		const second = remote.branches.get(SHARED) ?? "";
 		expect(second).not.toBe(first);
@@ -333,7 +333,7 @@ branches:
 		expect((await pr()).stdout).toBe(
 			[
 				"created PR #1 tallyrelease/release/main/a: chore(release): a@1.1.0",
-				`created PR #2 ${SHARED}: chore(release): b@1.1.0, c@1.1.0`,
+				`created PR #2 ${SHARED}: chore(release): main`,
 				"",
 			].join("\n"),
 		);
@@ -415,7 +415,7 @@ branches:
 		expect((await pr()).stdout).toBe(
 			[
 				`created PR #1 ${a}: chore(release): a@1.1.0`,
-				`created PR #2 ${SHARED}: chore(release): b@1.1.0`,
+				`created PR #2 ${SHARED}: chore(release): main`,
 				"",
 			].join("\n"),
 		);
@@ -423,7 +423,7 @@ branches:
 		const shared = withConfig(dag, config());
 		expect((await pr([], shared)).stdout).toBe(
 			[
-				`updated PR #2 ${SHARED}: chore(release): a@1.1.0, b@1.1.0`,
+				`updated PR #2 ${SHARED}: chore(release): main`,
 				`closed PR #1 ${a}`,
 				"",
 			].join("\n"),
@@ -437,7 +437,7 @@ branches:
 		expect((await pr()).stdout).toBe(
 			[
 				`created PR #3 ${a}: chore(release): a@1.1.0`,
-				`updated PR #2 ${SHARED}: chore(release): b@1.1.0`,
+				`updated PR #2 ${SHARED}: chore(release): main`,
 				"",
 			].join("\n"),
 		);
@@ -451,7 +451,7 @@ branches:
 
 		expect(await pr(["--dry-run"])).toEqual({
 			code: 0,
-			stdout: `commit as tallyrelease <tallyrelease@users.noreply.github.com>\nwould push ${SHARED}\nwould create PR ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			stdout: `commit as tallyrelease <tallyrelease@users.noreply.github.com>\nwould push ${SHARED}\nwould create PR ${SHARED}: chore(release): main\n`,
 			stderr: "",
 		});
 		expect(remote.calls).toEqual([]);
@@ -464,7 +464,7 @@ branches:
 			[
 				"commit as tallyrelease <tallyrelease@users.noreply.github.com>",
 				`would push ${SHARED}`,
-				`would update PR #1 ${SHARED}: chore(release): b@1.1.0`,
+				`would update PR #1 ${SHARED}: chore(release): main`,
 				"",
 			].join("\n"),
 		);
@@ -503,7 +503,7 @@ branches:
 		expect(remote.prs[0]?.labels).toEqual([]);
 
 		expect((await pr()).stdout).toBe(
-			`updated PR #1 ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			`updated PR #1 ${SHARED}: chore(release): main\n`,
 		);
 		expect(remote.prs).toHaveLength(1);
 		expect(remote.prs[0]?.labels).toEqual(["tallyrelease: pending"]);
@@ -571,7 +571,7 @@ branches:
 		);
 		await releasePrs(session, { dryRun: true }, { reconciled: new Set([1]) });
 		expect(stdout).toBe(
-			`commit as tallyrelease <tallyrelease@users.noreply.github.com>\nwould create PR ${SHARED}: chore(release): a@1.1.0, b@1.1.0\n`,
+			`commit as tallyrelease <tallyrelease@users.noreply.github.com>\nwould create PR ${SHARED}: chore(release): main\n`,
 		);
 	});
 
